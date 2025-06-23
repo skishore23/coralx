@@ -1,0 +1,125 @@
+# CORAL-X Cost-Optimized Modal Configuration
+# Properly allocated resources for 80%+ cost reduction
+
+# Experiment configuration
+experiment:
+  name: "coral-x-optimized"
+  population_size: 12
+  generations: 15
+  selection_pressure: 0.7
+  mutation_rate: 0.3
+  crossover_rate: 0.7
+
+# Evolution configuration  
+evolution:
+  rank_candidates: [4, 8, 16, 32]
+  alpha_candidates: [8.0, 16.0, 32.0, 64.0]
+  dropout_candidates: [0.0, 0.1, 0.2, 0.3]
+
+# Infrastructure configuration - OPTIMIZED
+infra:
+  executor: "modal"                        # MODAL ONLY - NO FALLBACKS
+  app_name: "coral-x-production-optimized" # Use cost-optimized app
+  resources:
+    cpu: 2                                 # CPU cores for orchestration
+    memory: 4096                          # Memory in MB (reduced from 32GB)
+    gpu: "A10G"                           # A10G for inference (cheaper than A100)
+    timeout: 1800                         # Timeout in seconds
+
+# Cache configuration - Modal Volume Paths
+cache:
+  artifacts_dir: "/cache/adapters"           # MODAL VOLUME PATH
+  base_checkpoint: "codellama/CodeLlama-7b-Python-hf"
+  cache_metadata: true
+  cleanup_threshold: 100
+  auto_sync: true
+  modal_mount: "/cache"                      # Modal volume mount point
+  modal_native: true                         # Enable Modal-native caching
+
+# Generation configuration - Optimized parameters
+generation:
+  max_tokens: 400                           # Reduced from 512
+  temperature: 0.7
+  top_p: 0.9
+  top_k: 50
+
+# Cheap Knobs - Runtime generation parameters
+cheap_knobs:
+  temperature_range: [0.3, 0.8]            # SAFER: Prevents nested function generation
+  top_p_range: [0.75, 0.92]               # SAFER: More focused nucleus sampling
+  top_k_range: [20, 50]                   # SAFER: More focused top-k prevents chaos
+  repetition_penalty_range: [1.1, 1.3]    # SAFER: Higher minimum prevents loops
+  max_tokens_range: [200, 400]            # Token generation limit range
+
+# Evaluation configuration - Optimized
+evaluation:
+  code_timeout: 5                          # Reduced timeout for code execution
+  max_test_cases: 10                       # Reduced from unlimited
+  batch_size: 4                           # Process in smaller batches
+
+# Multi-objective configuration with optimized thresholds
+multi_objective:
+  bugfix_weight: 1.0
+  style_weight: 0.5
+  security_weight: 0.3
+  runtime_weight: 0.2
+  syntax_weight: 0.8
+  
+  # Optimized thresholds for faster convergence
+  thresholds:
+    bugfix: 0.6      # Minimum bugfix score to survive
+    style: 0.4       # Minimum style score 
+    security: 0.3    # Minimum security score
+    runtime: 0.2     # Minimum runtime efficiency
+    syntax: 0.8      # Minimum syntax correctness
+
+# Dataset configuration
+dataset:
+  name: "quixbugs"
+  split: "test"
+  max_problems: 20                         # Reduced from unlimited
+  
+# Clone-cache system configuration
+clone_cache:
+  enabled: true
+  heavy_gene_threshold: 0.8               # Cache threshold
+  cheap_knob_recompute: true              # Always recompute cheap knobs
+  cache_hit_target: 0.7                  # Target 70% cache hit rate
+
+# Benchmark configuration - Optimized
+benchmark:
+  enabled: true
+  num_problems: 3                         # Reduced from 5
+  timeout_per_problem: 300                # 5 minutes per problem
+  batch_size: 1                          # Process one at a time
+
+# Monitoring configuration - Lightweight
+monitoring:
+  enabled: true
+  log_level: "INFO"
+  metrics_interval: 60                    # Log metrics every minute
+  progress_updates: true
+  
+# Emergent behavior tracking - Optimized
+emergent_behavior:
+  enabled: true
+  tracking_interval: 300                  # Check every 5 minutes
+  alert_threshold: 0.8                    # Alert on significant changes
+  
+# Execution configuration
+execution:
+  parallel_evaluations: 4                 # Reduced parallelism
+  batch_processing: true
+  
+# Resource optimization flags
+optimization:
+  cpu_only_utilities: true               # Use CPU for file operations
+  right_sized_gpu: true                  # Use A10G for inference
+  minimal_memory: true                   # Use minimal memory allocations
+  fast_timeouts: true                    # Use shorter timeouts
+  
+# Cost monitoring
+cost_tracking:
+  enabled: true
+  budget_alert_threshold: 100            # Alert if daily cost > $100
+  resource_utilization_target: 0.8      # Target 80% resource utilization 

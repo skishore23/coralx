@@ -1,0 +1,40 @@
+cache:
+  artifacts_dir: ./test_artifacts
+  base_checkpoint: codellama/CodeLlama-7b-Python-hf
+  metadata: true
+evo:
+  alpha_range:
+  - 16.0
+  - 64.0
+  dropout_range:
+  - 0.05
+  - 0.3
+  rank_candidates:
+  - 4
+  - 8
+  - 16
+  - 32
+execution:
+  generations: 2
+  output_dir: ./test_results
+  population_size: 4
+experiment:
+  dataset:
+    path: ../quixbugs_dataset
+  model:
+    name: codellama/CodeLlama-7b-Python-hf
+  name: coral_x_test
+  target: quixbugs_codellama
+seed: 42
+threshold:
+  base_thresholds:
+    bugfix: 0.6
+    runtime: 0.7
+    security: 0.9
+    style: 0.8
+  max_thresholds:
+    bugfix: 0.9
+    runtime: 0.9
+    security: 1.0
+    style: 0.97
+  schedule: sigmoid

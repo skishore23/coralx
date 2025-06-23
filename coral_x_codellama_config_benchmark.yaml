@@ -1,0 +1,214 @@
+cache:
+  artifacts_dir: /cache/adapters  # 🔥 MODAL VOLUME PATH (not local)
+  base_checkpoint: codellama/CodeLlama-7b-Python-hf
+  cleanup_threshold: 100
+  metadata: true
+  modal_native: true  # When true, prefers Modal volume for all caching (--executor=modal)
+  run_id: "dora_test_v1"  # 🔥 UNIQUE RUN ID - forces fresh DoRA training
+
+evaluation:
+  adaptive_testing:
+    capability_thresholds:
+      easy_cutoff: 0.3
+      medium_cutoff: 0.6
+    enable: true
+    max_easy_problems: 10
+    max_hard_problems: 8
+    max_medium_problems: 12
+  fitness_weights:
+    bugfix: 0.3      # Reduced to make room for syntax
+    runtime: 0.1     # Reduced slightly
+    security: 0.25   # Increased slightly  
+    style: 0.15      # Reduced to make room for syntax
+    syntax: 0.2      # NEW: Syntax correctness objective
+
+# 🔥 FIX: Use local path for emergent tracking to avoid read-only /cache issues
+emergent_tracking:
+  enabled: true                                     # Enable simple emergent behavior detection
+  output_dir: "./results/emergent_behavior"        # 🔥 LOCAL PATH - writable directory
+  alert_threshold: 0.8                             # Confidence threshold for alerts
+  save_frequency: 20                               # Save progress every N evaluations
+
+evo:
+  alpha_candidates:  # Balanced for cache grouping (8 groups optimal)
+  - 4.0
+  - 8.0
+  - 16.0
+  - 24.0
+  - 32.0
+  - 48.0
+  - 64.0
+  - 96.0
+  ca:
+    grid_size:
+    - 8
+    - 8
+    initial_density: 0.3
+    rule_range:
+    - 1
+    - 255
+    steps_range:
+    - 5
+    - 25  # Increased max steps for more diversity
+  diversity:
+    # Dynamic diversity adjustment based on cache hit rates and performance
+    mode: adaptive           # Options: adaptive, fixed, aggressive
+    base_strength: 1.0       # Base diversity injection strength (1.0 = current level)
+    max_strength: 2.0        # Maximum diversity when plateau detected
+    min_strength: 0.3        # Minimum diversity for cache efficiency
+    cache_threshold: 0.8     # If cache hit rate > 80%, increase diversity
+    plateau_threshold: 0.05  # If improvement < 5% over 3 gens, increase diversity
+    plateau_window: 3        # Generations to check for plateau
+  dropout_candidates:  # Conservative grouping (5 groups optimal)
+  - 0.05
+  - 0.1
+  - 0.15
+  - 0.2
+  - 0.3
+  rank_candidates:  # Moderate grouping (6 groups optimal)
+  - 4
+  - 8
+  - 16
+  - 24
+  - 32
+  - 48
+  target_modules:
+  - q_proj
+  - k_proj
+  - v_proj
+  - o_proj
+adapter_type: "lora" # "lora" or "dora" - FIXED: Changed to lora to avoid Modal DORA support issues
+
+execution:
+  generations: 20
+  output_dir: ./results
+  population_size: 10
+  selection_mode: "pareto"
+  current_generation: 0  # For emergent behavior tracking (updated automatically)
+
+experiment:
+  dataset:
+    path: /cache/quixbugs_dataset  # Modal-compatible path (corrected to match actual volume mount)
+    training_problems:
+    - gcd
+    - get_factors
+    - is_valid_parenthesization
+    - levenshtein
+    - longest_common_subsequence
+    - max_sublist_sum
+    - pascal
+    - reverse_linked_list
+    - hanoi
+    - mergesort
+  model:
+    cache_dir: /cache/models  # Modal-compatible path
+    name: codellama/CodeLlama-7b-Python-hf
+  name: coral_x_codellama_quixbugs_production
+  target: quixbugs_codellama
+
+generation:
+  do_sample: true
+  max_tokens: 512
+  temperature: 0.7
+  top_k: 50
+  top_p: 0.9
+
+# Two-Loop Architecture: Heavy genes + Cheap knobs
+cheap_knobs:
+  temperature_range: [0.3, 1.2]        # Conservative to creative generation
+  top_p_range: [0.75, 0.95]           # Focused to broad nucleus sampling
+  top_k_range: [15, 70]               # Focused to broad top-k sampling
+  repetition_penalty_range: [1.05, 1.25]  # Mild to strong anti-repetition
+  max_tokens_range: [120, 350]        # Short to long generation
+
+infra:
+  cache_volume:
+    auto_sync: true
+    local_path: ./coral_cache
+    modal_mount: /cache
+  executor: modal
+  local:
+    max_workers: 4
+  modal:
+    app_name: coral-x-production
+    functions:
+      evaluate_genome:
+        cpu: 8
+        gpu: A100-40GB
+        memory: 32768
+        timeout: 1800
+      generate_code:
+        cpu: 4
+        gpu: A100-40GB
+        memory: 16384
+        timeout: 1800  # 🔥 FIXED: Increased from 600s to match other functions
+      run_benchmarks:
+        cpu: 8
+        gpu: A100-40GB
+        memory: 32768
+        timeout: 1800
+      run_experiment:
+        cpu: 8
+        gpu: A100-40GB
+        memory: 32768
+        timeout: 3600
+      train_lora:
+        cpu: 8
+        gpu: A100-40GB
+        memory: 32768
+        timeout: 1800
+    image_config:
+      base: debian_slim
+      packages:
+      - torch
+      - transformers
+      - accelerate
+      - peft
+      - datasets
+      - numpy
+      - scipy
+      - scikit-learn
+      - pyyaml
+      - pytest
+      - huggingface_hub
+    volume_name: coral-x-clean-cache
+
+seed: 42
+
+system:
+  dependencies:
+  - numpy
+  - torch
+  - transformers
+  - modal
+  - yaml
+  fail_fast: true
+  version_check: true
+
+threshold:
+  base_thresholds:
+    bugfix: 0.25    # Start low, allow evolution to improve
+    runtime: 0.30   # Reasonable runtime performance
+    security: 0.40  # Basic security compliance
+    style: 0.35     # Basic style compliance
+    syntax: 0.3     # NEW: Start with loose syntax requirements
+  max_thresholds:
+    bugfix: 0.75    # High bugfix target over time
+    runtime: 0.80   # Good runtime performance
+    security: 0.85  # Strong security
+    style: 0.80     # Good style compliance
+    syntax: 0.9     # NEW: End with strict syntax requirements
+  schedule: sigmoid
+
+training:
+  adam_epsilon: 1e-8
+  batch_size: 4
+  epochs: 5
+  gradient_accumulation_steps: 8
+  learning_rate: 2e-4
+  logging_steps: 50
+  max_grad_norm: 1.0
+  save_steps: 500
+  save_strategy: steps
+  warmup_steps: 100
+  weight_decay: 0.01 

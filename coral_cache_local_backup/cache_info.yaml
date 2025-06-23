@@ -1,0 +1,7 @@
+created_by: CoralX Cache Manager
+directories:
+  adapters: /Users/kishore/neat/coralx/coral_cache/adapters
+  datasets: /Users/kishore/neat/coralx/coral_cache/datasets
+  models: /Users/kishore/neat/coralx/coral_cache/models
+  results: /Users/kishore/neat/coralx/coral_cache/results
+version: '1.0'

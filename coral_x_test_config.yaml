@@ -1,0 +1,161 @@
+# CORAL-X Test Configuration - Fast End-to-End Validation
+# Reduced parameters for quick testing and debugging
+
+# System Configuration
+system:
+  fail_fast: true
+  log_level: INFO
+  random_seed: 42
+
+# Evolution Parameters - REDUCED FOR TESTING
+evolution:
+  population_size: 8              # Reduced from 32 for faster testing
+  max_generations: 5              # Reduced from 40 for quick validation  
+  mutation_rate: 0.15
+  selection_method: tournament
+  elitism_rate: 0.25
+
+# Cellular Automata Configuration
+ca:
+  grid_size_min: 8
+  grid_size_max: 16               # Reduced max size
+  evolution_steps_min: 10
+  evolution_steps_max: 30         # Reduced max steps
+  rule_min: 30
+  rule_max: 200
+  boundary_conditions: periodic
+
+# Feature Extraction
+features:
+  complexity_weight: 1.0
+  intensity_weight: 0.8
+  periodicity_weight: 0.6
+  convergence_weight: 0.4
+
+# LoRA Configuration Mapping
+lora:
+  rank_min: 4
+  rank_max: 8                     # Reduced from 32
+  alpha_min: 8.0
+  alpha_max: 32.0                 # Reduced from 64.0
+  dropout_min: 0.1
+  dropout_max: 0.3                # Reduced from 0.4
+  target_modules:
+    - q_proj
+    - k_proj
+    - v_proj
+    - o_proj
+
+# Multi-Objective Thresholds - RELAXED FOR TESTING
+thresholds:
+  bugfix:
+    sla_target: 0.70              # Reduced from 0.90
+    initial_threshold: 0.05
+    final_threshold: 0.70         # Reduced from 0.90
+    progression_type: sigmoid
+    steepness: 12.0
+  
+  style:
+    sla_target: 0.80              # Reduced from 0.97
+    initial_threshold: 0.05
+    final_threshold: 0.80         # Reduced from 0.97
+    progression_type: sigmoid
+    steepness: 12.0
+  
+  security:
+    sla_target: 0.90              # Reduced from 1.0
+    initial_threshold: 0.05
+    final_threshold: 0.90         # Reduced from 1.0
+    progression_type: sigmoid
+    steepness: 12.0
+  
+  runtime:
+    sla_target: 0.70              # Reduced from 0.90
+    initial_threshold: 0.05
+    final_threshold: 0.70         # Reduced from 0.90
+    progression_type: sigmoid
+    steepness: 12.0
+
+# Cache Configuration
+cache:
+  artifacts_dir: /cache/adapters
+  base_checkpoint: codellama/CodeLlama-7b-Python-hf
+  metadata: true 
+  cleanup_threshold: 50           # Reduced for testing
+
+# Experiment Configuration
+experiment:
+  name: coral_x_test              # Changed name for test
+  dataset: quixbugs
+  model:
+    name: codellama/CodeLlama-7b-Python-hf
+    cache_dir: /cache/models
+  
+  dataset_config:
+    path: /cache/quixbugs_dataset
+    train_problems: 5             # Reduced training problems for speed
+    test_problems: 10             # Reduced test problems for speed
+    
+  training:
+    epochs: 2                     # Reduced from 3
+    batch_size: 2                 # Reduced from 4
+    learning_rate: 2e-4
+    warmup_steps: 20              # Reduced from 50
+    gradient_accumulation_steps: 2 # Reduced from 4
+
+# Infrastructure Configuration  
+infra:
+  executor: modal
+  modal:
+    app_name: coral-x-clean
+    volume_name: coral-x-clean-cache
+  
+  # Function configurations with reduced resources for testing
+  functions:
+    run_experiment:
+      cpu: 2.0                    # Reduced CPU
+      memory: 8192                # Reduced memory (8GB)
+      timeout: 1800               # 30 minutes
+      
+    evaluate_genome:
+      cpu: 2.0                    # Reduced CPU  
+      memory: 4096                # Reduced memory (4GB)
+      timeout: 900                # 15 minutes
+      
+    train_lora:
+      gpu: A100-40GB
+      cpu: 4.0                    # Reduced CPU
+      memory: 16384               # Reduced memory (16GB)
+      timeout: 1200               # 20 minutes (reduced)
+      
+    generate_code:
+      gpu: T4
+      cpu: 2.0                    # Reduced CPU
+      memory: 8192                # Reduced memory (8GB)
+      timeout: 300                # 5 minutes
+
+# Architecture Validation
+architecture:
+  validate_compliance: true
+  require_lora_training: true
+  require_multi_objective: true
+  require_cache_system: true
+  require_threshold_gates: true
+
+# Benchmarking - REDUCED FOR TESTING
+benchmarking:
+  enabled: true
+  max_problems: 10                # Reduced from all problems
+  timeout_per_problem: 30         # Reduced timeout
+  
+  metrics:
+    - bugfix_score
+    - style_score
+    - security_compliance
+    - runtime_efficiency
+    
+  sla_targets:
+    bugfix_score: 0.70            # Relaxed SLA targets
+    style_score: 0.80
+    security_compliance: 0.90
+    runtime_efficiency: 0.70 

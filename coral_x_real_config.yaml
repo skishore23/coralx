@@ -1,0 +1,61 @@
+cache:
+  artifacts_dir: ./artifacts
+  base_checkpoint: codellama/CodeLlama-7b-Python-hf
+  metadata: true
+  run_id: null  # Set to unique value to force fresh training (e.g., "exp_001", "dora_test_v1")
+evo:
+  alpha_range:
+  - 16.0
+  - 64.0
+  dropout_range:
+  - 0.05
+  - 0.3
+  rank_candidates:
+  - 4
+  - 8
+  - 16
+  - 32
+execution:
+  generations: 5
+  output_dir: ./coral_x_real_results
+  population_size: 8
+experiment:
+  dataset:
+    path: ../quixbugs_dataset
+  execution:
+    use_modal: false
+  model:
+    name: codellama/CodeLlama-7b-Python-hf
+  name: coral_x_real_quixbugs
+  target: quixbugs_codellama
+infra:
+  executor: local
+  resources:
+    cpu: 2
+    memory: 4096
+    timeout: 600
+
+# Cheap Knobs - TWO-LOOP ARCHITECTURE runtime generation parameters
+cheap_knobs:
+  temperature_range: [0.4, 1.0]        # Conservative range for local testing
+  top_p_range: [0.80, 0.92]           # Moderate nucleus sampling range
+  top_k_range: [25, 60]               # Moderate top-k range
+  repetition_penalty_range: [1.05, 1.20]  # Mild anti-repetition range
+  max_tokens_range: [150, 300]        # Moderate token generation range
+seed: 42
+threshold:
+  base_thresholds:
+    bugfix: 0.4      # More lenient starting point
+    runtime: 0.5
+    security: 0.6    # Much more lenient for security
+    style: 0.6
+    syntax: 0.3      # Add missing syntax threshold
+  max_thresholds:
+    bugfix: 0.8      # Less strict maximum for short experiments
+    runtime: 0.8
+    security: 0.85   # More achievable security target
+    style: 0.9
+    syntax: 0.8      # Add missing syntax max
+  schedule: linear   # Linear progression for short experiments
+
+adapter_type: "lora" # "lora" or "dora" - Changed to lora to fix Modal training failures

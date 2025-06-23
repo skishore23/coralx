@@ -1,0 +1,542 @@
+# CoralX - Functional CORAL Evolution System
+# .cursorrules - Guidelines for working with this codebase
+
+## 🏗️ ARCHITECTURE OVERVIEW
+
+CoralX is a functional evolution system combining:
+- **Cellular Automata (CA)** + **LoRA (Low-Rank Adaptation)** 
+- **NEAT-style evolution** with **CodeLlama integration**
+- **QuixBugs dataset** for code generation benchmarking
+- **Modal.com** for distributed GPU execution
+
+### Architecture Layers (Categorical Hierarchy)
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    CLI Category                             │
+│                (Terminal Objects)                          │
+├─────────────────────────────────────────────────────────────┤
+│                Application Category                         │
+│              (Business Logic Functors)                     │
+├─────────────────────────────────────────────────────────────┤
+│                  Domain Category                           │
+│         (Pure Mathematical Objects & Morphisms)            │
+├─────────────────────────────────────────────────────────────┤
+│                 Ports Category                             │
+│              (Abstract Interfaces)                         │
+├─────────────────────────────────────────────────────────────┤
+│         Infrastructure & Plugins Categories                │
+│            (Effectful Functors)                           │
+└─────────────────────────────────────────────────────────────┘
+```
+
+## 🧮 CORE PRINCIPLES
+
+### 1. **Mathematical Correctness via Category Theory**
+- **Objects**: Immutable records (`@dataclass(frozen=True)`)
+- **Morphisms**: Pure functions (no side effects) 
+- **Functors**: Map between categories while preserving structure
+- **Natural Transformations**: Queue operations for distributed execution
+- **Composition Laws**: `F(g ∘ f) = F(g) ∘ F(f)` must always hold
+
+### 2. **Radical Simplicity**
+- **Write the MINIMUM code** that solves the actual problem
+- **Reuse existing pure functions** rather than recreating logic
+- **Delete code** that isn't essential to the core functionality
+- **Question every line** - does this solve the real problem?
+
+### 3. **Fail-Fast Principle (Zero Tolerance)**
+- **NO fallback implementations EVER**
+- **NO hardcoded mock data**
+- **NO defensive programming** 
+- **NO "just in case" code**
+- **Explicit error messages** when real implementations needed
+- **Better to crash early** than fail silently later
+
+### 4. **Pure Functional Composition** 
+- **Domain layer = 100% pure functions** (no exceptions)
+- **ALL data structures immutable** (`frozen=True`)
+- **NO side effects** in core logic (prints, file I/O, network calls)
+- **Compose small functions** (5-20 lines max)
+- **Pipeline style**: `data |> f1 |> f2 |> f3`
+
+### 5. **Distributed Systems = Category Theory**
+- **Modal functions = Functors** between Local and Distributed categories
+- **Queue operations = Natural transformations** (preserve structure)
+- **Cache system = Categorical limits** (universal properties)
+- **Race conditions = Broken composition laws** (fix via proper functors)
+
+## 🤖 AI ASSISTANT GUIDELINES
+
+### **How YOU (Cursor) Should Approach Tasks**
+
+#### **1. ALWAYS Start with Category Theory**
+- **Identify the category** - which layer does this belong in?
+- **Check composition laws** - will this break functorial structure?  
+- **Preserve immutability** - use `@dataclass(frozen=True)` everywhere
+- **Maintain purity** - no side effects in domain functions
+
+#### **2. RADICAL Code Minimalism**
+- **Read existing code FIRST** - understand what's already there
+- **Reuse pure functions** - don't recreate domain logic
+- **Delete unnecessary code** - prefer removal over addition
+- **Question every import** - is this dependency really needed?
+
+#### **3. Pattern Matching for Fast Development**
+- **Follow established patterns** exactly (see examples below)
+- **Use existing function signatures** - don't invent new ones
+- **Copy successful implementations** - then adapt minimally
+- **Leverage Modal app structure** - delegate to clean services
+
+#### **4. Fail-Fast Debugging Strategy**
+- **Explicit error messages** with full context
+- **No defensive programming** - let it crash with clear info
+- **Trace category boundaries** - where did pure functions become impure?
+- **Check composition chains** - is the pipeline broken?
+
+## 📁 FILE ORGANIZATION (Category-Aware)
+
+### **Where to Put New Code (AI Decision Tree):**
+
+#### `coral/domain/` - Pure Mathematical Category
+- **ONLY pure functions** (no exceptions)
+- **NO imports from infra/ or plugins/** (category violation)
+- **NO I/O operations** (not even prints)
+- **Examples**: `ca.py`, `genome.py`, `mapping.py`
+- **AI Rule**: If it's math/logic/data transformation → domain
+
+#### `coral/application/` - Functor Category (Domain→Infrastructure)
+- **Coordinates domain + infrastructure** via functors
+- **Examples**: `evolution_engine.py`, `experiment_orchestrator.py`
+- **AI Rule**: If it orchestrates pure functions with I/O → application
+
+#### `infra/` - Effect Category (Distributed Computing)
+- **Modal.com integration, caching, executors**
+- **Examples**: `modal_executor.py`, `adapter_cache.py`
+- **AI Rule**: If it talks to external systems → infrastructure
+
+#### `plugins/` - Experiment Category (Specialized Functors)
+- **Dataset providers, model runners, fitness functions**
+- **Examples**: `plugins/quixbugs_codellama/`
+- **AI Rule**: If it's experiment-specific → plugins
+
+#### `cli/` - Terminal Category (User Interface)
+- **User-facing commands and configuration**
+- **Examples**: `cli/coral.py`
+- **AI Rule**: If user interacts with it → CLI
+
+## 🎯 CODING PATTERNS (AI Reference Guide)
+
+### **1. Immutable Data Structures (Category Objects)**
+```python
+# ✅ PERFECT - Follow this pattern exactly
+@dataclass(frozen=True)
+class Genome:
+    seed: CASeed
+    lora_cfg: LoRAConfig
+    id: str
+    fitness: Optional[float] = None
+    
+    def with_fitness(self, fitness: float) -> 'Genome':
+        """Functional update - creates new instance."""
+        return Genome(self.seed, self.lora_cfg, self.id, fitness)
+
+# ❌ FORBIDDEN - Never use mutable classes
+class Genome:
+    def __init__(self):
+        self.fitness = 0  # Mutable state!
+```
+
+### **2. Pure Functions (Category Morphisms)**
+```python
+# ✅ PERFECT - Pure mathematical function  
+def evolve(seed: CASeed) -> CAStateHistory:
+    """Pure arrow: Seed ──▶ History."""
+    state = seed.grid.copy()
+    hist = [state.copy()]
+    for _ in range(seed.steps):
+        state = next_step(state, seed.rule)
+        hist.append(state.copy())
+    return CAStateHistory(hist)
+
+# ❌ FORBIDDEN - Side effects break purity
+def evolve(seed):
+    print("Evolving...")  # Side effect!
+    save_to_file(result)   # Side effect!
+```
+
+### **3. Composition Pipelines (Functorial Structure)**
+```python
+# ✅ PERFECT - Clear function composition
+def _eval_single(self, genome: Genome) -> Genome:
+    hist = evolve(genome.seed)                    # F1: Seed → History
+    feats = extract_features(hist)                # F2: History → Features  
+    lora = map_features_to_lora_config(feats, cfg) # F3: Features → LoRA
+    
+    # Bridge to effectful world (via executor)
+    model = self.model_factory(lora)              # IO: LoRA → Model
+    fitness = self.fitness_fn(genome, model, problems) # IO: Evaluation
+    
+    return replace(genome, fitness=fitness)       # F4: Result → Genome
+
+# ❌ FORBIDDEN - Monolithic functions
+def evaluate_genome(genome):
+    # 100+ lines mixing pure logic with I/O...
+```
+
+### **4. Fail-Fast Error Handling (Zero Tolerance)**
+```python
+# ✅ PERFECT - Explicit, informative failures
+def map_features_to_lora_config(features: CAFeatures, config: Dict[str, Any]) -> AdapterConfig:
+    if 'evo' not in config:
+        raise ValueError("FAIL-FAST: 'evo' section missing from configuration")
+    
+    evo_raw = config['evo']
+    required_fields = ['rank_candidates', 'alpha_candidates', 'dropout_candidates']
+    for field in required_fields:
+        if field not in evo_raw:
+            raise ValueError(f"FAIL-FAST: '{field}' missing from evolution configuration")
+    
+    # ... real implementation
+
+# ❌ FORBIDDEN - Silent fallbacks
+def map_features_to_lora(features):
+    try:
+        return real_mapping(features)
+    except:
+        return LoRAConfig(r=8, alpha=16.0)  # Silent fallback!
+```
+
+### **5. Modal Function Patterns (Distributed Functors)**
+```python
+# ✅ PERFECT - Delegate to clean services
+@app.function(gpu="A100", memory=32GB)
+def evaluate_genome_modal(genome_data: dict, config: dict) -> dict:
+    """Modal function delegates to domain logic."""
+    import sys
+    from pathlib import Path
+    
+    # Add coralx to Python path
+    coralx_path = Path("/root/coralx")
+    sys.path.insert(0, str(coralx_path))
+    
+    # Import clean service (separation of concerns)
+    from infra.modal.experiment_service import evaluate_genome_modal
+    
+    # Delegate to clean architecture
+    return evaluate_genome_modal(genome_data, config)
+
+# ❌ FORBIDDEN - Business logic in Modal function
+@app.function(gpu="A100") 
+def evaluate_genome_modal(genome):
+    # 50+ lines of evolution logic here...
+```
+
+### **6. Configuration Access (Functorial Dict Operations)**
+```python
+# ✅ PERFECT - Fail-fast config access with validation
+def extract_config_section(config: Dict[str, Any], section: str, required_fields: List[str]) -> Dict[str, Any]:
+    if section not in config:
+        raise ValueError(f"FAIL-FAST: '{section}' section missing from configuration")
+    
+    section_config = config[section]
+    for field in required_fields:
+        if field not in section_config:
+            raise ValueError(f"FAIL-FAST: '{field}' missing from {section} configuration")
+    
+    return section_config
+
+# ❌ FORBIDDEN - Defensive programming
+def get_config_value(config, key, default=None):
+    return config.get(key, default)  # Silent fallback!
+```
+
+## 🧠 AI PROBLEM-SOLVING STRATEGY
+
+### **Step-by-Step Approach for Every Task**
+
+#### **1. Understand the Category (5 seconds)**
+- **Read the request** - what layer does this belong in?
+- **Check existing patterns** - is there already a similar function?
+- **Identify dependencies** - what pure functions can I reuse?
+
+#### **2. Find Existing Code (30 seconds)**
+- **Search for similar functions** - don't reinvent wheels
+- **Check the file structure** - follow established organization
+- **Look for imports** - understand the dependency graph
+
+#### **3. Write Minimal Code (2 minutes)**
+- **Copy successful pattern** - adapt existing working code
+- **Use proper types** - `@dataclass(frozen=True)` for data
+- **Compose functions** - build pipelines from pure functions
+- **Add fail-fast validation** - explicit error messages
+
+#### **4. Test Category Laws (1 minute)**
+- **Check immutability** - can this data be mutated?
+- **Verify purity** - any side effects in domain functions?
+- **Test composition** - do the functions chain correctly?
+
+### **Common AI Mistakes to Avoid**
+
+#### **❌ ANTI-PATTERN: Recreating Existing Logic**
+```python
+# BAD - Writing new evolution logic
+def my_new_evolve_function(seed):
+    # 50 lines of CA logic...
+
+# GOOD - Using existing pure function
+from coral.domain.ca import evolve
+result = evolve(seed)  # 1 line, tested, works
+```
+
+#### **❌ ANTI-PATTERN: Adding Defensive Programming**
+```python
+# BAD - "Helpful" fallbacks
+def get_config_value(config, key):
+    try:
+        return config[key]
+    except KeyError:
+        return "default_value"  # Silent failure!
+
+# GOOD - Fail-fast
+def get_config_value(config: Dict[str, Any], key: str) -> Any:
+    if key not in config:
+        raise ValueError(f"FAIL-FAST: '{key}' missing from configuration")
+    return config[key]
+```
+
+#### **❌ ANTI-PATTERN: Mixing Categories**
+```python
+# BAD - Domain function doing I/O
+def extract_features(history: CAStateHistory) -> CAFeatures:
+    print(f"Extracting features...")  # Side effect in domain!
+    save_debug_info(history)          # File I/O in domain!
+
+# GOOD - Pure domain function
+def extract_features(history: CAStateHistory) -> CAFeatures:
+    # Pure mathematical computation only
+    return CAFeatures(complexity, intensity, periodicity, convergence)
+```
+
+## 🔧 MODAL.COM INTEGRATION (AI Guidelines)
+
+### **Modal Functions as Distributed Functors**
+
+#### **Perfect Modal Function Pattern (Copy This)**
+```python
+@app.function(
+    image=coral_image,
+    volumes={"/cache": coral_volume},
+    gpu="A100-40GB",
+    memory=32768,
+    timeout=1800
+)
+def new_modal_function(input_data: dict, config: dict) -> dict:
+    """Always follow this exact pattern."""
+    import sys
+    from pathlib import Path
+    
+    # Standard Modal setup (copy exactly)
+    coralx_path = Path("/root/coralx")
+    if not coralx_path.exists():
+        raise RuntimeError("FAIL-FAST: CoralX codebase not found in Modal environment")
+    sys.path.insert(0, str(coralx_path))
+    
+    # Import clean service (never business logic here)
+    from infra.modal.your_service import your_function_modal
+    
+    # Delegate immediately (Modal is just a container)
+    return your_function_modal(input_data, config)
+```
+
+#### **Modal AI Rules**
+1. **Never write business logic in @app.function** - delegate immediately
+2. **Always use clean services** in `infra/modal/`
+3. **Copy resource specs** from existing functions
+4. **Use consistent error handling** - FAIL-FAST everywhere
+
+### **Queue-Based Future (Reference)**
+```python
+# 🔮 FUTURE: Queue-based categorical perfection
+@app.function(gpu="A100", memory=32GB)
+def evaluate_genome_worker():
+    """Natural functor via queues."""
+    genome = training_queue.get()           # η: Local → Queue  
+    result = pure_evaluate(genome)          # Pure domain function
+    results_queue.put(result)               # μ: Queue → Local
+    # Composition laws preserved automatically
+```
+
+## 🧪 TESTING GUIDELINES (AI Debugging)
+
+### **AI Debugging Strategy**
+1. **Start with pure functions** - test domain logic first
+2. **Trace category boundaries** - where does purity break?
+3. **Check composition chains** - is the pipeline intact?
+4. **Verify Modal connectivity** - are distributed functors working?
+
+### **Testing Patterns (Copy These)**
+```python
+# ✅ PERFECT - Test pure functions directly
+def test_evolve_ca():
+    """Test pure domain function - no mocks needed."""
+    seed = CASeed(grid=np.array([[1, 0, 1]]), rule=30, steps=5)
+    history = evolve(seed)
+    assert len(history.history) == 6  # Initial + 5 steps
+    assert history.history[0].shape == (1, 3)
+
+# ✅ PERFECT - Test fail-fast behavior
+def test_config_validation():
+    """Test that configuration fails fast."""
+    bad_config = {'wrong': 'structure'}
+    with pytest.raises(ValueError, match="FAIL-FAST"):
+        map_features_to_lora_config(features, bad_config)
+
+# ✅ PERFECT - Direct execution with timeout
+def test_generated_code_direct():
+    """Direct execution - no pytest complexity."""
+    import signal
+    
+    def timeout_handler(signum, frame):
+        raise TimeoutError("Test timeout - infinite loop detected")
+    
+    signal.signal(signal.SIGALRM, timeout_handler)
+    signal.alarm(5)  # 5-second timeout
+    
+    try:
+        result = exec_generated_function(inputs)
+        signal.alarm(0)
+        return result == expected
+    except TimeoutError:
+        return False  # Timeout = test failed
+```
+
+### **AI Testing Rules**
+- **Test pure functions in isolation** - no mocks needed
+- **Use real data** - no mock/fake test cases
+- **Direct execution** - avoid pytest complexity for code execution
+- **Timeout protection** - 5-second max per test
+- **Fail-fast validation** - test error handling explicitly
+
+## 📦 DEPENDENCIES
+
+### Core (Always Required)
+- `numpy>=1.20.0` - Numerical computing
+- `scipy>=1.7.0` - Scientific computing  
+- `pyyaml>=5.4.0` - Configuration
+
+### Optional (Feature-Specific)
+- `modal-client>=0.50.0` - Distributed execution
+- `torch>=1.9.0` - PyTorch for CodeLlama
+- `transformers>=4.15.0` - HuggingFace models
+- `peft>=0.3.0` - LoRA adaptation
+
+## 🚫 ANTI-PATTERNS TO AVOID
+
+### ❌ Mixing Layers
+```python
+# BAD - Domain importing infrastructure
+from infra.modal_executor import ModalExecutor
+
+def evolve_population(genomes):
+    executor = ModalExecutor()  # Domain depends on infra!
+```
+
+### ❌ Mutable State
+```python
+# BAD - Mutable class
+class Population:
+    def __init__(self):
+        self.genomes = []  # Mutable!
+    
+    def add_genome(self, genome):
+        self.genomes.append(genome)  # Mutation!
+```
+
+### ❌ Silent Fallbacks
+```python
+# BAD - Silent degradation
+def get_model():
+    try:
+        return load_real_model()
+    except:
+        return MockModel()  # Silent fallback!
+```
+
+### ❌ God Functions
+```python
+# BAD - 100+ line function doing everything
+def run_evolution_experiment(config):
+    # ... 200 lines of mixed logic
+```
+
+## 🎯 CORALX SPECIFIC FEATURES
+
+### Clone-Cache System
+- Heavy genes (rank, alpha, dropout) → training required → cached
+- Cheap knobs (CA-derived) → inference only → recomputed
+
+### Multi-Objective Optimization
+- Four dimensions: bugfix, style, security, runtime
+- Threshold gates with σ-wave dynamics
+- Progressive strictness over generations
+
+### Threshold Gates
+- Dynamic thresholds: loose early → strict at generation 40
+- Population protection (prevent eliminating all genomes)
+- Configurable progression schedules (sigmoid, linear, sqrt)
+
+## 🔄 WORKFLOW
+
+### Adding New Features:
+1. **Domain first** - Pure functions in `coral/domain/`
+2. **Application layer** - Orchestration in `coral/application/`  
+3. **Infrastructure** - Modal/caching in `infra/`
+4. **Plugin integration** - Experiment-specific in `plugins/`
+5. **CLI exposure** - User interface in `cli/`
+
+### Adding New Experiments:
+1. **Create plugin** - `plugins/my_experiment/`
+2. **Implement interfaces** - `DatasetProvider`, `ModelRunner`, `FitnessFn`
+3. **Add configuration** - `my_experiment_config.yaml`
+4. **Test locally** - Before Modal deployment
+
+## 🏆 SUCCESS METRICS
+
+- **Pure domain layer**: No side effects, easily testable
+- **Composable functions**: Small, focused, reusable
+- **Clean boundaries**: Clear separation between layers  
+- **Fail-fast behavior**: Explicit errors, no silent degradation
+- **Performance**: 10-60x speedup via clone-cache system
+
+## 🎯 AI ASSISTANT FINAL CHECKLIST
+
+### **Before Writing Any Code:**
+- [ ] **Which category?** Domain/Application/Infrastructure/Plugin/CLI?
+- [ ] **Reuse existing?** Search for similar functions first
+- [ ] **Minimal code?** Can this be 1-5 lines instead?
+- [ ] **Proper types?** `@dataclass(frozen=True)` for immutable data?
+
+### **Before Submitting:**
+- [ ] **Pure functions?** No side effects in domain layer?
+- [ ] **Fail-fast?** Explicit error messages with context?
+- [ ] **Composition?** Functions chain correctly?
+- [ ] **Modal pattern?** Delegates to clean services?
+
+### **AI Success Mantras:**
+1. **"Less code is better code"** - prefer deletion over addition
+2. **"Reuse over recreate"** - leverage existing pure functions
+3. **"Fail-fast over fallback"** - explicit errors beat silent failures
+4. **"Category theory predicts bugs"** - broken functors cause real problems
+5. **"Modal = container only"** - business logic goes in services
+
+## 📝 REMEMBER (Category Theory Foundation)
+
+1. **Mathematical Correctness First** - category laws prevent bugs
+2. **Radical Simplicity** - write minimum code that solves the problem
+3. **Fail-Fast Always** - explicit failures beat silent degradation
+4. **Pure Functional Composition** - build pipelines from small functions
+5. **Distributed = Category Theory** - queues restore broken functors
+
+**"Make illegal states unrepresentable"** - Use types and category theory to enforce correctness.
+
+**"Performance follows mathematical correctness"** - Fix the category theory, fix the performance. 

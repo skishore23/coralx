@@ -1,0 +1,42 @@
+#!/bin/bash
+# CORAL-X CLI Wrapper
+
+case "$1" in
+    "status")
+        python coral_status.py
+        ;;
+    "rich")
+        python coral_rich_dashboard.py
+        ;;
+    "live")  
+        python coral_rich_dashboard.py --live
+        ;;
+    "debug")
+        python coral_rich_dashboard.py --debug
+        ;;
+    "help"|"--help"|"-h")
+        echo "🎯 CORAL-X Command Center"
+        echo ""
+        echo "Usage: ./coralx <command>"
+        echo ""
+        echo "Commands:"
+        echo "  status  - Show evolution status (simple)"
+        echo "  rich    - Show rich dashboard (static)"
+        echo "  live    - Show live streaming dashboard"
+        echo "  debug   - Debug Modal log streaming"
+        echo "  help    - Show this help"
+        echo ""
+        echo "Examples:"
+        echo "  ./coralx status   # Quick status check"
+        echo "  ./coralx rich     # Beautiful dashboard"
+        echo "  ./coralx live     # Live streaming (Ctrl+C to exit)"
+        ;;
+    *)
+        echo "🎯 CORAL-X Command Center"
+        echo "Usage: ./coralx <command>"
+        echo "Try './coralx help' for available commands"
+        echo ""
+        echo "💡 Running default unified dashboard..."
+        python coral_rich_dashboard.py
+        ;;
+esac 

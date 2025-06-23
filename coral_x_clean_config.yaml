@@ -1,0 +1,132 @@
+# CORAL-X Clean Configuration - NO DATA LEAKAGE (DoRA + LoRA Compatible)
+# Only evaluates on 8 clean problems, excludes all 23 contaminated ones
+# Works identically for both DoRA and LoRA adapters
+
+# Evolution parameters
+evo:
+  rank_candidates: [4, 8, 16, 32]  # Heavy genes: LoRA rank options
+  alpha_candidates: [16.0, 32.0, 64.0]  # Heavy genes: discrete LoRA alpha values
+  dropout_candidates: [0.05, 0.1, 0.2, 0.3]  # Heavy genes: discrete LoRA dropout values
+  target_modules:  # LoRA target modules
+  - q_proj
+  - k_proj
+  - v_proj
+  - o_proj
+  ca:  # Cellular automata parameters
+    grid_size:
+    - 8
+    - 8
+    initial_density: 0.3
+    rule_range:
+    - 1
+    - 255
+    steps_range:
+    - 5
+    - 20
+
+# 🔥 ANTI-CONTAMINATION: Explicitly exclude training problems
+experiment:
+  name: "coral_x_clean_benchmark"   # Experiment name
+  target: "code_repair"             # Experiment target/type
+  dataset:
+    path: "/cache/quixbugs_dataset"  # Path to QuixBugs dataset
+    training_problems:  # These 23 problems are EXCLUDED from evaluation
+      - bitcount
+      - bucketsort
+      - find_first_in_sorted
+      - find_in_sorted
+      - flatten
+      - gcd
+      - get_factors
+      - hanoi
+      - is_valid_parenthesization
+      - knapsack
+      - kth
+      - levenshtein
+      - lis
+      - longest_common_subsequence
+      - max_sublist_sum
+      - mergesort
+      - pascal
+      - powerset
+      - quicksort
+      - rpn_eval
+      - shunting_yard
+      - sqrt
+      - subsequences
+  
+  # Clean evaluation - only 8 problems available:
+  # kheapsort, lcs_length, next_palindrome, next_permutation, 
+  # possible_change, sieve, to_base, wrap
+  
+  model:
+    name: "codellama/CodeLlama-7b-Python-hf"
+
+# Execution settings - CLEAN EVALUATION MODE
+execution:
+  population_size: 12              # Smaller population for clean evaluation
+  generations: 15                  # More generations since we have clean data
+  selection_mode: "pareto"         # Use NSGA-II to prevent population collapse
+  parallelism: 1                   # Sequential for clean debugging
+  output_dir: "results"            # Output directory for results and reports
+
+# 🚀 DoRA/LoRA Adapter Configuration (CLEAN TRAINING GUARANTEED)
+adapter_type: "lora"              # Use LoRA - FIXED: DoRA support issues in Modal environment
+
+# Thresholds - more lenient since we have fewer test problems
+threshold:
+  base_thresholds:                # Starting thresholds (generation 0)
+    bugfix: 0.5                   # More lenient - fewer problems to validate on
+    style: 0.7
+    security: 0.8
+    runtime: 0.6
+    syntax: 0.3
+  max_thresholds:                 # Final thresholds (final generation)
+    bugfix: 0.8                   # Achievable targets with clean data
+    style: 0.9
+    security: 0.95
+    runtime: 0.8
+    syntax: 0.8
+  schedule: "sigmoid"             # Threshold progression: linear | sqrt | sigmoid
+
+# Infrastructure
+infra:
+  executor: "modal"
+  modal:
+    app_name: "coral-x-production"
+
+# Random seed
+seed: 42
+
+# Cache configuration
+cache:
+  artifacts_dir: "/cache/adapters"
+  base_checkpoint: "codellama/CodeLlama-7b-Python-hf"
+  metadata: true
+  cleanup_threshold: 50
+
+# Evaluation configuration
+evaluation:
+  adaptive_testing:
+    enable: false                 # Keep simple for clean evaluation
+  fitness_weights:
+    bugfix: 0.4                   # Emphasize bug fixing
+    style: 0.2
+    security: 0.2
+    runtime: 0.1
+    syntax: 0.1
+
+# Generation settings
+generation:
+  max_tokens: 512
+  temperature: 0.7
+  top_p: 0.9
+  top_k: 50
+
+# Two-Loop Architecture: Heavy genes + Cheap knobs
+cheap_knobs:
+  temperature_range: [0.2, 0.8]        # SAFER: Conservative range prevents nested functions
+  top_p_range: [0.75, 0.92]           # SAFER: More focused nucleus sampling  
+  top_k_range: [20, 50]               # SAFER: More focused top-k prevents chaos
+  repetition_penalty_range: [1.1, 1.3]  # SAFER: Higher minimum prevents repetition loops
+  max_tokens_range: [120, 350]        # Short to long generation 

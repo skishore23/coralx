@@ -1,0 +1,40 @@
+# Exclude local cache directories
+coral_cache/
+artifacts/
+results/
+wandb/
+
+# Exclude git and version control
+.git/
+.gitignore
+.DS_Store
+
+# Exclude Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# Exclude IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Exclude local test outputs
+test_output/
+*.log
+
+# Exclude environment files
+.env
+.env.local
+
+# Exclude temporary files
+*.tmp
+*.temp
+.tmp/ 
+
+# Exclude reports
+reports/

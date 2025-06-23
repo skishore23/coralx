@@ -1,0 +1,157 @@
+# CORAL-X Modal Configuration - Fully Modal-Native
+# No fallbacks, no hardcodings, no local dependencies
+
+# Evolution parameters
+evo:
+  rank_candidates: [4, 8, 16, 32]  # Heavy genes: LoRA rank options
+  alpha_candidates: [16.0, 32.0, 64.0]  # Heavy genes: discrete LoRA alpha values
+  dropout_candidates: [0.05, 0.1, 0.2, 0.3]  # Heavy genes: discrete LoRA dropout values
+  target_modules:  # LoRA target modules
+  - q_proj
+  - k_proj
+  - v_proj
+  - o_proj
+  ca:  # Cellular automata parameters
+    grid_size:
+    - 8
+    - 8
+    initial_density: 0.3
+    rule_range:
+    - 1
+    - 255
+    steps_range:
+    - 5
+    - 20
+  population: 32                   # Population size (good for cache diversity)
+  generations: 10                  # Number of generations
+
+# Runtime configuration - Modal execution strategies
+runtime:
+  gpu: A100-40GB                   # GPU type for Modal functions
+  execution_strategy: distributed  # Distributed Modal execution
+  timeout: 3600                    # Function timeout in seconds
+  memory: 32768                    # Memory allocation in MB
+
+# Execution settings - MODAL-NATIVE ONLY
+execution:
+  population_size: 32              # Must match evo.population
+  generations: 10                  # Must match evo.generations
+  output_dir: "/cache/results"     # MODAL VOLUME PATH ONLY
+  use_modal: true                  # Always true for this config
+
+# Experiment configuration - MODAL-NATIVE PATHS
+experiment:
+  name: "coral_x_modal_quixbugs"
+  target: "quixbugs_codellama"
+  dataset:
+    path: "/cache/quixbugs_dataset"  # MODAL VOLUME PATH ONLY
+  model:
+    name: "codellama/CodeLlama-7b-Python-hf"
+    torch_dtype: "float16"
+    device_map: "auto"
+    cache_dir: "/cache/models"      # MODAL VOLUME PATH ONLY
+
+# Infrastructure settings - MODAL-NATIVE
+infra:
+  executor: "modal"                # MODAL ONLY - NO FALLBACKS
+  resources:
+    cpu: 2                         # CPU cores
+    memory: 32768                  # Memory in MB
+    gpu: "A100-40GB"              # GPU type
+    timeout: 3600                  # Timeout in seconds
+
+# Cache configuration - MODAL VOLUME PATHS ONLY
+cache:
+  artifacts_dir: "/cache/adapters"           # MODAL VOLUME PATH ONLY
+  base_checkpoint: "codellama/CodeLlama-7b-Python-hf"
+  cache_metadata: true
+  cleanup_threshold: 100
+  auto_sync: true
+  modal_mount: "/cache"                      # Modal volume mount point
+  modal_native: true                         # Enable Modal-native caching
+
+# Generation configuration
+generation:
+  max_tokens: 512
+  temperature: 0.7
+  top_p: 0.9
+  top_k: 50
+
+# Cheap Knobs - TWO-LOOP ARCHITECTURE runtime generation parameters
+cheap_knobs:
+  temperature_range: [0.2, 0.8]        # SAFER: Prevents nested function generation
+  top_p_range: [0.75, 0.92]           # SAFER: More focused nucleus sampling
+  top_k_range: [20, 50]               # SAFER: More focused top-k prevents chaos
+  repetition_penalty_range: [1.1, 1.3]  # SAFER: Higher minimum prevents loops
+  max_tokens_range: [200, 400]        # Token generation limit range
+
+# Evaluation configuration - MODAL-NATIVE
+evaluation:
+  timeout: 30                      # Test execution timeout
+  use_real_tests: true            # Use real QuixBugs test cases
+  direct_execution: true          # Use direct Python execution (no pytest complexity)
+  style_checker: "flake8"         # Code style analysis tool
+  security_checker: "bandit"      # Security analysis tool
+  max_test_cases: 12              # Maximum test cases per problem
+  test_timeout: 5                 # Per-test timeout (prevent infinite loops)
+  fitness_weights:                # Multi-objective fitness weights
+    bugfix: 0.4                   # Primary objective - actual bug fixing
+    style: 0.25                   # Code quality and style
+    security: 0.2                 # Security compliance
+    runtime: 0.15                 # Performance efficiency
+
+# Training configuration - MODAL-NATIVE
+training:
+  batch_size: 4                   # Training batch size
+  learning_rate: 0.0003           # LoRA learning rate
+  num_epochs: 3                   # Training epochs
+  warmup_steps: 100               # Learning rate warmup
+  logging_steps: 50               # Training log frequency
+  save_steps: 500                 # Checkpoint save frequency
+  max_seq_length: 512             # Maximum sequence length
+
+# Threshold Gate configuration with σ-wave dynamics
+threshold:
+  base_thresholds:                # Starting thresholds (generation 0)
+    bugfix: 0.6
+    style: 0.8
+    security: 0.9
+    runtime: 0.7
+    syntax: 0.3                   # Loose syntax threshold at start
+  max_thresholds:                 # Final thresholds (final generation)
+    bugfix: 0.9
+    style: 0.97
+    security: 1.0
+    runtime: 0.9
+    syntax: 0.9                   # Strict syntax threshold at end
+  schedule: "sigmoid"             # Threshold progression: linear | sqrt | sigmoid
+
+# Random seed for reproducibility
+seed: 42
+
+# Modal-specific settings - NO HARDCODINGS
+modal:
+  app_name: "coral-x-clean"              # Must match coral_modal_app.py
+  volume_name: "coral-cache"             # Must match coral_modal_app.py
+  image_build_timeout: 1800
+  function_concurrency: 10
+  
+# Modal volume configuration - EXPLICIT PATHS
+volumes:
+  cache_mount: "/cache"                   # Modal volume mount point
+  adapters_path: "/cache/adapters"        # LoRA adapter storage
+  models_path: "/cache/models"            # Model cache storage
+  dataset_path: "/cache/quixbugs_dataset" # Dataset storage
+  results_path: "/cache/results"          # Experiment results
+
+# System configuration
+system:
+  fail_fast: true                 # Enable fail-fast behavior
+  debug_mode: false              # Disable debug output for production
+  log_level: "INFO"              # Logging level
+
+# Monitoring and logging
+monitoring:
+  enable_log_streaming: true
+  save_intermediate_results: true
+  progress_frequency: 10          # Progress updates every N genomes 

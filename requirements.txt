@@ -1,0 +1,27 @@
+# CoralX Dependencies
+# Core scientific computing
+numpy>=1.20.0,<2.0.0  # Pin to 1.x for PyTorch compatibility
+scipy>=1.7.0
+
+# Configuration and data handling
+pyyaml>=5.4.0
+
+# Modal and distributed computing
+modal>=0.50.0
+
+# ML model support
+torch>=2.1.0
+transformers>=4.36.0
+peft>=0.7.0
+accelerate>=0.25.0
+datasets>=2.14.0
+
+# Development dependencies (optional)
+# pytest>=6.0.0
+# black>=22.0.0
+# mypy>=0.910
+
+# Real evaluation dependencies
+pytest>=7.4.0      # For QuixBugs test execution
+flake8>=6.1.0       # For style evaluation
+bandit>=1.7.5       # For security evaluation 
