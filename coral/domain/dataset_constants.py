@@ -25,6 +25,28 @@ QUIXBUGS_CLEAN_TEST_PROBLEMS = frozenset({
     'possible_change', 'sieve', 'to_base', 'wrap'
 })
 
+# 🎯 PROBLEM DIFFICULTY CLASSIFICATIONS
+# Easy problems: Simple algorithms, basic data structures
+EASY_PROBLEMS = frozenset({
+    'gcd', 'bitcount', 'sqrt', 'is_valid_parenthesization',
+    'reverse_linked_list', 'flatten', 'to_base', 'get_factors'
+})
+
+# Hard problems: Complex algorithms, advanced data structures
+HARD_PROBLEMS = frozenset({
+    'hanoi', 'mergesort', 'quicksort', 'kheapsort',
+    'levenshtein', 'longest_common_subsequence', 'knapsack',
+    'next_permutation', 'powerset', 'subsequences'
+})
+
+# Medium problems: Everything else that has JSON test data
+MEDIUM_PROBLEMS = frozenset({
+    'kth', 'lis', 'lcs_length', 'max_sublist_sum', 'pascal',
+    'bucketsort', 'find_in_sorted', 'find_first_in_sorted',
+    'next_palindrome', 'possible_change', 'rpn_eval', 'shunting_yard',
+    'sieve', 'wrap'
+})
+
 # 📊 DATASET STATISTICS
 TOTAL_TRAINING_PROBLEMS = len(QUIXBUGS_TRAINING_PROBLEMS)  # 24
 TOTAL_CLEAN_TEST_PROBLEMS = len(QUIXBUGS_CLEAN_TEST_PROBLEMS)  # 8
@@ -53,6 +75,9 @@ validate_no_overlap()
 __all__ = [
     'QUIXBUGS_TRAINING_PROBLEMS',
     'QUIXBUGS_CLEAN_TEST_PROBLEMS', 
+    'EASY_PROBLEMS',
+    'MEDIUM_PROBLEMS', 
+    'HARD_PROBLEMS',
     'is_training_problem',
     'is_clean_test_problem',
     'validate_no_overlap'

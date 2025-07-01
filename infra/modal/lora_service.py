@@ -37,7 +37,7 @@ def train_lora_adapter_modal(base_model: str, heavy_key, save_path: str, config:
         )
     
     # Train using clean HeavyGenes object - returns adapter path string
-    adapter_path = train_codellama_lora(base_model, heavy_genes, save_path)
+    adapter_path = train_codellama_lora(base_model, heavy_genes, save_path, config)
     
     # ✅ COMMIT VOLUME CHANGES - Critical for container coordination
     # This ensures other containers (generation, evaluation) can see the trained adapter

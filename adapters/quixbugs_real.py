@@ -29,32 +29,32 @@ class QuixBugsMetrics:
 class QuixBugsRealAdapter:
     """Real QuixBugs adapter using actual dataset and test execution."""
     
-    def __init__(self, dataset_path: str = None):
-        # Auto-detect dataset location if not provided
-        if dataset_path is None:
-            # Try cache locations first, then fallback locations
-            possible_paths = [
-                "/cache/quixbugs_dataset",           # Modal cache (CORRECT PATH - FIRST PRIORITY)
-                "./coral_cache/quixbugs_dataset",   # Local cache (corrected)
-                "/data/quixbugs_dataset",            # Legacy path
-                "../quixbugs_dataset",               # Legacy relative
-                "./QuixBugs",                        # Manual clone
-                "../QuixBugs"                        # Manual clone relative
-            ]
+    def _is_modal_environment(self) -> bool:
+        """Detect if running in Modal environment."""
+        import os
+        return (
+            os.getenv('MODAL_FUNCTION_ID') is not None or
+            os.getenv('MODAL_TASK_ID') is not None or
+            os.path.exists('/cache')
+        )
+    
+    def __init__(self, dataset_path: str = None, config: Dict[str, Any] = None):
+        # 🔧 CATEGORY-THEORY COMPLIANT: Use centralized path resolution
+        if dataset_path is None and config is not None:
+            from coral.config.path_utils import create_path_config_from_dict, get_dataset_path
             
-            dataset_path = None
-            for path in possible_paths:
-                if Path(path).exists():
-                    dataset_path = path
-                    print(f"📁 QuixBugs real dataset loaded from: {path}")
-                    break
+            # Get executor type and resolve paths using category theory principles
+            executor_type = config.get('infra', {}).get('executor', 'modal')
+            path_config = create_path_config_from_dict(config, executor_type)
+            dataset_path = get_dataset_path(path_config)
             
-            if dataset_path is None:
-                raise FileNotFoundError(
-                    f"QuixBugs dataset not found in any of these locations:\n" +
-                    "\n".join(f"  • {p}" for p in possible_paths) +
-                    f"\n\n💡 Run: python setup_quixbugs_dataset.py setup"
-                )
+            print(f"📁 QuixBugs dataset path from config: {dataset_path}")
+            print(f"🔧 Resolved using executor: {executor_type}")
+        elif dataset_path is None:
+            raise ValueError(
+                "FAIL-FAST: No dataset path provided and no config available. "
+                "Either provide dataset_path parameter or config with paths section."
+            )
         
         self.dataset_path = Path(dataset_path)
         self.buggy_programs_path = self.dataset_path / "python_programs"
@@ -66,7 +66,29 @@ class QuixBugsRealAdapter:
         
         # Validate dataset exists and has required structure
         if not self.dataset_path.exists():
-            raise FileNotFoundError(f"QuixBugs dataset not found at {dataset_path}")
+            # Check if we're in Modal environment and try to set up dataset automatically
+            if self._is_modal_environment():
+                print(f"📦 QuixBugs dataset not found at {dataset_path}, setting up automatically...")
+                print(f"🔍 Modal environment detected, attempting to cache dataset...")
+                try:
+                    from infra.modal.dataset_service import cache_quixbugs_dataset_modal
+                    result_path = cache_quixbugs_dataset_modal(config=config)
+                    print(f"✅ Dataset caching returned: {result_path}")
+                    if not self.dataset_path.exists():
+                        print(f"❌ Dataset still not found after caching, checking if path was different...")
+                        print(f"   Expected: {self.dataset_path}")
+                        print(f"   Returned: {result_path}")
+                    else:
+                        print(f"✅ QuixBugs dataset set up successfully at {dataset_path}")
+                except Exception as setup_error:
+                    print(f"❌ Dataset caching failed with error: {setup_error}")
+                    print(f"❌ Error type: {type(setup_error)}")
+                    raise RuntimeError(
+                        f"FAIL-FAST: QuixBugs training data not available: {setup_error}. "
+                        f"Cannot train LoRA adapter without real training data."
+                    )
+            else:
+                raise FileNotFoundError(f"QuixBugs dataset not found at {dataset_path}")
         
         # Validate required directories exist
         required_dirs = [self.buggy_programs_path, self.correct_programs_path, self.testcases_path]
@@ -183,6 +205,7 @@ Buggy Code:
 Provide the corrected Python code:
 ```python
 """
+
 
 
 def evaluate_quixbugs(adapter_path: str, generated_code: str, 
@@ -477,43 +500,7 @@ def _evaluate_runtime_speedup(generated_code: str, problem: Dict[str, Any]) -> f
         )
 
 
-def threshold_gate(scores: QuixBugsMetrics, sigma: float, 
-                  thresholds_config: Dict[str, Any]) -> bool:
-    """
-    Apply threshold gate with σ-wave dynamics.
-    Function name from coral-x-codellama.md specification.
-    """
-    # Import from coralx package structure
-    from coral.domain.threshold_gate import apply_threshold_gate, ObjectiveThresholds
-    
-    # Convert QuixBugsMetrics to MultiObjectiveScores
-    multi_scores = MultiObjectiveScores(
-        bugfix=scores.bugfix,
-        style=scores.style,
-        security=scores.security,
-        runtime=scores.runtime,
-        syntax=0.8  # Default syntax score for adapter compatibility
-    )
-    
-    # Create thresholds using sigma
-    base_thresholds = thresholds_config.get('base', {
-        'bugfix': 0.6, 'style': 0.8, 'security': 0.9, 'runtime': 0.7, 'syntax': 0.3
-    })
-    max_thresholds = thresholds_config.get('max', {
-        'bugfix': 0.9, 'style': 0.97, 'security': 1.0, 'runtime': 0.9, 'syntax': 0.9
-    })
-    
-    # Apply sigma interpolation
-    current_thresholds = {}
-    for key in base_thresholds:
-        base_val = base_thresholds[key]
-        max_val = max_thresholds[key]
-        current_thresholds[key] = base_val + sigma * (max_val - base_val)
-    
-    threshold_obj = ObjectiveThresholds(**current_thresholds)
-    
-    # Apply gate
-    return apply_threshold_gate(multi_scores, threshold_obj)
+
 
 
 def create_quixbugs_real_config(dataset_path: str = "../quixbugs_dataset") -> Dict[str, Any]:

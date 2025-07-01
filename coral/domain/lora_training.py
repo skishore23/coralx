@@ -66,7 +66,7 @@ def create_lora_config_from_features(features: Dict[str, float]) -> AdapterConfi
     )
 
 
-def train_codellama_lora(base_ckpt: str, heavy_genes: 'HeavyGenes', save_to: str) -> str:  # 🔥 FIX: Expect specific type
+def train_codellama_lora(base_ckpt: str, heavy_genes: 'HeavyGenes', save_to: str, config: Dict[str, Any] = None) -> str:  # 🔥 FIX: Expect specific type
     """
     Train CodeLlama LoRA adapter with given heavy genes.
     Function name from coral-x-codellama.md specification.
@@ -79,6 +79,18 @@ def train_codellama_lora(base_ckpt: str, heavy_genes: 'HeavyGenes', save_to: str
     Returns:
         str: Path to the saved adapter
     """
+    # DEBUG: Print all paths being used
+    print(f"🔍 DEBUG PATHS - train_codellama_lora:")
+    print(f"   • base_ckpt: {base_ckpt}")
+    print(f"   • save_to: {save_to}")
+    print(f"   • config provided: {config is not None}")
+    if config:
+        print(f"   • config keys: {list(config.keys())}")
+        if 'paths' in config:
+            print(f"   • config paths: {config['paths']}")
+        if 'experiment' in config:
+            print(f"   • experiment config: {config.get('experiment', {}).keys()}")
+    
     # Validate input type for clarity
     from infra.adapter_cache import HeavyGenes
     if not isinstance(heavy_genes, HeavyGenes):
@@ -102,6 +114,8 @@ def train_codellama_lora(base_ckpt: str, heavy_genes: 'HeavyGenes', save_to: str
     
     print(f"🔧 Adapter configuration: type={adapter_type}, r={rank}, α={alpha}, dropout={dropout}")
     
+
+    
     # Create adapter configuration (supports both LoRA and DoRA)
     lora_config = AdapterConfig(
         r=int(rank),           # 🔥 FIXED: Use PEFT convention (r)
@@ -118,7 +132,9 @@ def train_codellama_lora(base_ckpt: str, heavy_genes: 'HeavyGenes', save_to: str
         from adapters.quixbugs_real import QuixBugsRealAdapter
         
         print(f"📁 Loading QuixBugs training data...")
-        adapter = QuixBugsRealAdapter()  # Use auto-detection
+        print(f"🔍 DEBUG: Creating QuixBugsRealAdapter with config: {config is not None}")
+        adapter = QuixBugsRealAdapter(config=config)  # Pass config for dataset path
+        print(f"🔍 DEBUG: QuixBugsRealAdapter created successfully")
         problems = list(adapter.problems())
         
         # 🔥 CRITICAL: Use centralized training problems list for DoRA/LoRA training
@@ -126,7 +142,9 @@ def train_codellama_lora(base_ckpt: str, heavy_genes: 'HeavyGenes', save_to: str
         from .dataset_constants import QUIXBUGS_TRAINING_PROBLEMS
         TRAINING_PROBLEMS = QUIXBUGS_TRAINING_PROBLEMS
         
-        training_count = 0
+        training_problems_found = 0
+        training_examples_created = 0
+        
         for problem in problems:
             problem_name = problem.get('name', 'unknown')
             
@@ -163,18 +181,23 @@ def train_codellama_lora(base_ckpt: str, heavy_genes: 'HeavyGenes', save_to: str
                 ]
                 
                 training_data.extend(base_examples)
-                training_count += len(base_examples)
+                training_problems_found += 1
+                training_examples_created += len(base_examples)
         
         print(f"✅ Loaded {len(training_data)} QuixBugs training examples")
         print(f"📊 DORA/LORA TRAIN/TEST SPLIT VALIDATION:")
         print(f"   • Training problems: {len(TRAINING_PROBLEMS)} (CENTRALIZED - prevents data leakage)")
-        print(f"   • Training examples: {training_count}")
+        print(f"   • Training problems found: {training_problems_found}")
+        print(f"   • Training examples created: {training_examples_created} ({training_examples_created//training_problems_found if training_problems_found > 0 else 0}x per problem)")
         print(f"   • Total QuixBugs problems: {len(problems)}")
         print(f"   • Test problems available: {len(problems) - len(TRAINING_PROBLEMS)}")
         print(f"   • 🛡️  ANTI-CONTAMINATION: DoRA/LoRA adapters will NEVER see test problems")
         
-        if training_count != len(TRAINING_PROBLEMS):
-            print(f"⚠️  WARNING: Expected {len(TRAINING_PROBLEMS)} training problems, got {training_count}")
+        # Validate problem count matches expected
+        if training_problems_found != len(TRAINING_PROBLEMS):
+            print(f"⚠️  WARNING: Expected {len(TRAINING_PROBLEMS)} training problems, got {training_problems_found}")
+        else:
+            print(f"✅ Training problem count matches expected: {len(TRAINING_PROBLEMS)} problems")
             
     except Exception as e:
         raise RuntimeError(
@@ -192,7 +215,8 @@ def train_codellama_lora(base_ckpt: str, heavy_genes: 'HeavyGenes', save_to: str
         base_model_name=base_ckpt,
         lora_config=lora_config,
         training_data=training_data,
-        save_directly_to=save_to  # Train directly to Modal volume
+        save_directly_to=save_to,  # Train directly to Modal volume
+        config=config  # Pass config for path resolution
     )
     
     # Verify adapter exists at expected location
@@ -200,6 +224,9 @@ def train_codellama_lora(base_ckpt: str, heavy_genes: 'HeavyGenes', save_to: str
         raise RuntimeError(f"CRITICAL: Adapter not found after training: {save_to}")
     
     print(f"✅ TRAIN_CODELLAMA_{adapter_type.upper()} completed: {save_to}")
+    
+
+    
     # Return the path string as expected by adapter cache
     return save_to
 
@@ -208,7 +235,8 @@ def train_lora_adapter_direct(
     base_model_name: str,
     lora_config: AdapterConfig,
     training_data: list,
-    save_directly_to: str
+    save_directly_to: str,
+    config: Dict[str, Any] = None
 ) -> str:
     """
     Train LoRA adapter and save directly to target path (simplified for Modal volume).
@@ -225,30 +253,71 @@ def train_lora_adapter_direct(
         print(f"🚀 Training {lora_config.adapter_type.upper()} adapter directly to: {target_path}")
         print(f"   r={lora_config.r}, α={lora_config.alpha}, dropout={lora_config.dropout}")
         
-        # Use Modal volume for model cache
-        model_cache_dir = "/cache/models" if Path("/cache").exists() else "./cache/models"
+        # 🔧 CATEGORY-THEORY COMPLIANT: Use centralized path resolution
+        if config is not None:
+            from coral.config.path_utils import create_path_config_from_dict, get_model_cache_path
+            
+            # Get executor type from config
+            executor_type = config.get('infra', {}).get('executor', 'modal')
+            path_config = create_path_config_from_dict(config, executor_type)
+            model_cache_dir = get_model_cache_path(path_config)
+            
+            print(f"📥 Loading base model: {base_model_name}")
+            print(f"🗂️  Using model cache: {model_cache_dir} (from {executor_type} config)")
+        else:
+            # Fallback to environment-based path detection
+            model_cache_dir = "/cache/models" if Path("/cache").exists() else "./cache/models"
+            print(f"📥 Loading base model: {base_model_name}")
+            print(f"🗂️  Using model cache: {model_cache_dir} (fallback - no config provided)")
         
-        print(f"📥 Loading base model: {base_model_name}")
-        print(f"🗂️  Using model cache: {model_cache_dir}")
+        Path(model_cache_dir).mkdir(parents=True, exist_ok=True)
         
-        tokenizer = AutoTokenizer.from_pretrained(
-            base_model_name,
-            cache_dir=model_cache_dir,
-            local_files_only=True  # Use cached model
-        )
+        # Robust model loading: try cache first, then download if needed
+        try:
+            print(f"🔄 Attempting to load from cache...")
+            tokenizer = AutoTokenizer.from_pretrained(
+                base_model_name,
+                cache_dir=model_cache_dir,
+                local_files_only=True  # Try cache first
+            )
+            print(f"✅ Tokenizer loaded from cache")
+        except Exception as cache_error:
+            print(f"⚠️  Cache miss for tokenizer: {cache_error}")
+            print(f"📥 Downloading tokenizer...")
+            tokenizer = AutoTokenizer.from_pretrained(
+                base_model_name,
+                cache_dir=model_cache_dir,
+                local_files_only=False  # Download if not cached
+            )
+            print(f"✅ Tokenizer downloaded and cached")
         
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
             print(f"🔧 Set padding token to EOS token: {tokenizer.eos_token}")
         
-        model = AutoModelForCausalLM.from_pretrained(
-            base_model_name,
-            torch_dtype=torch.float16,
-            device_map="auto",
-            cache_dir=model_cache_dir,
-            local_files_only=True,
-            low_cpu_mem_usage=True
-        )
+        try:
+            print(f"🔄 Attempting to load model from cache...")
+            model = AutoModelForCausalLM.from_pretrained(
+                base_model_name,
+                torch_dtype=torch.float16,
+                device_map="auto",
+                cache_dir=model_cache_dir,
+                local_files_only=True,  # Try cache first
+                low_cpu_mem_usage=True
+            )
+            print(f"✅ Model loaded from cache")
+        except Exception as cache_error:
+            print(f"⚠️  Cache miss for model: {cache_error}")
+            print(f"📥 Downloading model... (this may take several minutes)")
+            model = AutoModelForCausalLM.from_pretrained(
+                base_model_name,
+                torch_dtype=torch.float16,
+                device_map="auto",
+                cache_dir=model_cache_dir,
+                local_files_only=False,  # Download if not cached
+                low_cpu_mem_usage=True
+            )
+            print(f"✅ Model downloaded and cached")
         
         # 🔥 CONFIG-DRIVEN: Configure adapter based on config, fail-fast if unavailable
         if lora_config.adapter_type == "dora":
@@ -398,9 +467,131 @@ def train_lora_adapter_direct(
         target_path.mkdir(parents=True, exist_ok=True)
         print(f"   📁 Created fresh target directory: {target_path}")
         
-        # Save the trained adapter to clean directory
-        model.save_pretrained(target_path)
-        print(f"✅ Adapter saved to clean directory: {target_path}")
+        # 🔧 FAIL-FAST FIX: Set correct base model path for PEFT
+        # PEFT needs to find the base model config during save - ensure it's available
+        
+        # Find the actual cached model directory (HuggingFace cache format)
+        hf_cache_model_dir = Path(model_cache_dir) / f"models--{base_model_name.replace('/', '--')}"
+        
+        print(f"🔧 PEFT save preparation: {base_model_name} → {target_path}")
+        
+        # Check if the HuggingFace cache directory exists
+        if not hf_cache_model_dir.exists():
+            raise RuntimeError(
+                f"FAIL-FAST: HuggingFace cache directory not found: {hf_cache_model_dir}\n"
+                f"Model cache is corrupted or incomplete.\n"
+                f"Run: modal run coral_queue_modal_app.py::setup_model_cache\n"
+                f"NO FALLBACKS - fix the cache setup."
+            )
+        
+        # Look for the actual model directory with snapshots
+        snapshots_dir = hf_cache_model_dir / "snapshots"
+        if not snapshots_dir.exists():
+            raise RuntimeError(
+                f"FAIL-FAST: No snapshots directory in cache: {snapshots_dir}\n"
+                f"HuggingFace cache structure is invalid.\n"
+                f"Delete cache and re-run: modal run coral_queue_modal_app.py::setup_model_cache\n"
+                f"NO FALLBACKS - fix the cache structure."
+            )
+        
+        # Get the snapshot directory
+        snapshot_dirs = [d for d in snapshots_dir.iterdir() if d.is_dir()]
+        if not snapshot_dirs:
+            raise RuntimeError(
+                f"FAIL-FAST: No snapshots found in: {snapshots_dir}\n"
+                f"Model cache is empty or corrupted.\n"
+                f"Delete cache and re-run: modal run coral_queue_modal_app.py::setup_model_cache\n"
+                f"NO FALLBACKS - fix the cache contents."
+            )
+        
+        # Use the first (and usually only) snapshot directory
+        actual_model_path = snapshot_dirs[0]
+        
+        # Verify config.json exists
+        config_json = actual_model_path / "config.json"
+        if not config_json.exists():
+            raise RuntimeError(
+                f"FAIL-FAST: config.json not found: {config_json}\n"
+                f"Model cache is incomplete - missing configuration file.\n"
+                f"Delete cache and re-run: modal run coral_queue_modal_app.py::setup_model_cache\n"
+                f"NO FALLBACKS - ensure complete model cache."
+            )
+        
+        peft_base_path = str(actual_model_path)
+        print(f"🔧 Using cached model path: {peft_base_path}")
+        
+        # Update the model's base_model_name_or_path to the correct path
+        try:
+            if hasattr(model, 'peft_config') and model.peft_config:
+                for config_name, peft_config in model.peft_config.items():
+                    peft_config.base_model_name_or_path = peft_base_path
+            else:
+                raise RuntimeError("No PEFT config found - model may not be properly configured")
+        except Exception as config_error:
+            raise RuntimeError(
+                f"FAIL-FAST: Cannot update PEFT config base model path: {config_error}\n"
+                f"PEFT model configuration is invalid or corrupted.\n"
+                f"This indicates a deeper issue with the training process."
+            )
+        
+        # Ensure HuggingFace environment is properly set for PEFT to find cached model
+        import os
+        os.environ['HF_HOME'] = model_cache_dir
+        os.environ['TRANSFORMERS_CACHE'] = model_cache_dir
+        os.environ['HF_DATASETS_CACHE'] = model_cache_dir
+        
+        # Save the trained adapter - NO FALLBACKS
+        print(f"💾 Saving adapter to: {target_path}")
+        
+        try:
+            model.save_pretrained(
+                target_path,
+                save_config=True,
+                save_safetensors=True
+            )
+            print(f"✅ Adapter saved successfully: {target_path}")
+        except Exception as save_error:
+            # FAIL-FAST: Enhanced diagnostics with cache inspection
+            cache_diagnostics = []
+            
+            # Check what's actually in the cache
+            if Path(model_cache_dir).exists():
+                try:
+                    cache_items = list(Path(model_cache_dir).iterdir())
+                    cache_diagnostics.append(f"Cache directory exists with {len(cache_items)} items")
+                    for item in cache_items[:5]:  # Show first 5 items
+                        cache_diagnostics.append(f"  • {item.name}")
+                    if len(cache_items) > 5:
+                        cache_diagnostics.append(f"  • ... and {len(cache_items) - 5} more")
+                except Exception as e:
+                    cache_diagnostics.append(f"Cache directory exists but cannot list: {e}")
+            else:
+                cache_diagnostics.append(f"Cache directory does not exist: {model_cache_dir}")
+            
+            # Check PEFT model state
+            peft_diagnostics = []
+            try:
+                if hasattr(model, 'peft_config'):
+                    for name, config in model.peft_config.items():
+                        peft_diagnostics.append(f"PEFT config '{name}': base_model={config.base_model_name_or_path}")
+                else:
+                    peft_diagnostics.append("No PEFT config found")
+            except Exception as e:
+                peft_diagnostics.append(f"Cannot inspect PEFT config: {e}")
+            
+            # FAIL-FAST: Clear error message with comprehensive diagnostics
+            raise RuntimeError(
+                f"FAIL-FAST: Adapter save failed: {save_error}\n"
+                f"\nTarget: {target_path}\n"
+                f"Base model: {base_model_name}\n"
+                f"\nCache Diagnostics:\n" + "\n".join(cache_diagnostics) + "\n"
+                f"\nPEFT Diagnostics:\n" + "\n".join(peft_diagnostics) + "\n"
+                f"\nSOLUTIONS:\n"
+                f"1. Pre-cache the model: modal run coral_queue_modal_app.py::setup_model_cache\n"
+                f"2. Check HuggingFace token access: export HF_TOKEN=your_token\n"
+                f"3. Verify peft version: pip install peft>=0.10\n"
+                f"\nNO FALLBACKS - fix the root cause."
+            )
         
         # Clean up temporary training directory immediately
         if temp_training_dir.exists():
@@ -416,7 +607,7 @@ def train_lora_adapter_direct(
         # ENHANCED VERIFICATION: Check for specific required files with retry logic
         required_files = ['adapter_config.json', 'adapter_model.safetensors']
         
-        print(f"🔍 Verifying adapter files at: {target_path}")
+        print(f"🔍 Verifying adapter files...")
         if not target_path.exists():
             raise RuntimeError(f"CRITICAL: Target directory not created: {target_path}")
         
@@ -426,23 +617,19 @@ def train_lora_adapter_direct(
         # CRITICAL: Check if any training_tmp directories leaked into target
         leaked_temp_dirs = list(target_path.glob("training_tmp*"))
         if leaked_temp_dirs:
-            print(f"⚠️  WARNING: Found leaked temp directories in target: {leaked_temp_dirs}")
             for temp_dir in leaked_temp_dirs:
                 if temp_dir.is_dir():
                     shutil.rmtree(temp_dir)
-                    print(f"   🗑️  Removed leaked temp dir: {temp_dir}")
         
-        # List all files for debugging
+        # List all files for validation
         all_files = list(target_path.glob("*"))
         all_dirs = [f for f in all_files if f.is_dir()]
         all_files_only = [f for f in all_files if f.is_file()]
         
-        print(f"📄 Files in adapter directory: {[f.name for f in all_files_only]}")
+        # If there are directories, something went wrong
         if all_dirs:
-            print(f"📁 Directories in adapter directory: {[d.name for d in all_dirs]}")
-            # If there are directories, something went wrong
             for dir_item in all_dirs:
-                print(f"   📁 Directory contents of {dir_item.name}: {[x.name for x in dir_item.iterdir()]}")
+                print(f"   📁 Unexpected directory: {dir_item.name}")
         
         # Check for required files
         missing_files = []
@@ -450,9 +637,6 @@ def train_lora_adapter_direct(
             file_path = target_path / required_file
             if not file_path.exists():
                 missing_files.append(required_file)
-            else:
-                file_size = file_path.stat().st_size
-                print(f"   ✅ {required_file}: {file_size} bytes")
         
         if missing_files:
             # CRITICAL: Enhanced error message with detailed diagnostics
@@ -477,7 +661,7 @@ def train_lora_adapter_direct(
             
             raise RuntimeError(error_msg)
         
-        print(f"✅ Adapter verification complete: {len(all_files_only)} files, all required files present")
+        print(f"✅ Adapter verification complete: {len(all_files_only)} files")
         
         # Calculate model size
         model_size_mb = sum(
@@ -485,27 +669,26 @@ def train_lora_adapter_direct(
         ) / (1024 * 1024)
         
         print(f"✅ {lora_config.adapter_type.upper()} training completed in {training_time:.2f}s")
-        print(f"📦 Adapter saved directly to: {target_path}")
+        print(f"📦 Adapter saved to: {target_path}")
         print(f"💾 Trainable parameters: {model_size_mb:.2f}MB")
         
         # CRITICAL: Validate training quality
         final_loss = training_result.training_loss
         expected_min_time = total_examples * 0.1  # Rough heuristic: 0.1s per example minimum
         
-        print(f"🔍 Training Quality Assessment:")
-        print(f"   • Final training loss: {final_loss:.4f}")
-        print(f"   • Training time: {training_time:.2f}s")
-        print(f"   • Expected minimum time: {expected_min_time:.2f}s")
-        print(f"   • Training examples: {total_examples}")
-        
+        # Quality assessment with concise output
+        quality_warnings = []
         if training_time < expected_min_time:
-            print(f"   ⚠️  WARNING: Training may be too fast for meaningful learning")
+            quality_warnings.append("Training may be too fast")
         if final_loss > 2.0:
-            print(f"   ⚠️  WARNING: High final loss - may need more training")
+            quality_warnings.append("High final loss")
         if total_examples < 50:
-            print(f"   ⚠️  WARNING: Low training examples - consider expanding dataset")
-        if total_examples >= 50 and training_time > expected_min_time and final_loss < 1.5:
-            print(f"   ✅ Training quality indicators look good")
+            quality_warnings.append("Low training examples")
+        
+        if quality_warnings:
+            print(f"⚠️  Training quality warnings: {', '.join(quality_warnings)}")
+        else:
+            print(f"✅ Training quality indicators look good (loss: {final_loss:.3f})")
         
         # Return the adapter path string
         return str(target_path)

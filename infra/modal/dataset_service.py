@@ -8,55 +8,99 @@ from pathlib import Path
 from typing import List, Dict, Any
 
 
-def cache_quixbugs_dataset_modal():
-    """Cache QuixBugs dataset in Modal volume (fail-fast approach)."""
-    print("📦 Caching QuixBugs dataset in Modal...")
+def setup_quixbugs_dataset_modal(config: dict = None) -> dict:
+    """Setup QuixBugs dataset - returns existing dataset info since it's already cached."""
+    print("📦 Setting up QuixBugs dataset...")
     
-    # Use the correct Modal volume path (verified by modal volume ls)
-    cache_dir = Path("/cache/quixbugs_dataset")
-    cache_dir.mkdir(parents=True, exist_ok=True)
+    # Get dataset path from config, not hardcoded
+    if config:
+        from coral.config.path_utils import get_dataset_path
+        dataset_path = Path(get_dataset_path(config))
+    else:
+        # Fallback to default Modal path if no config provided
+        dataset_path = Path("/cache/quixbugs_dataset")
     
-    # Clone QuixBugs repository if not already cached
-    if not (cache_dir / ".git").exists():
-        print("🔄 Cloning QuixBugs repository...")
-        result = subprocess.run([
-            "git", "clone", "--depth", "1",
-            "https://github.com/jkoppel/QuixBugs.git",
-            str(cache_dir)
-        ], capture_output=True, text=True)
-        
-        if result.returncode != 0:
-            raise RuntimeError(f"FAIL-FAST: Failed to clone QuixBugs: {result.stderr}")
+    if not dataset_path.exists():
+        return {
+            'status': 'not_found',
+            'error': 'QuixBugs dataset not found in Modal volume'
+        }
     
-    # Dataset files are directly in the cache_dir
-    python_dir = cache_dir / "python_programs"
-    testcases_dir = cache_dir / "python_testcases"
+    # Check for required directories
+    python_dir = dataset_path / "python_programs"
+    testcases_dir = dataset_path / "python_testcases"
     
     if not python_dir.exists():
-        raise RuntimeError(f"FAIL-FAST: QuixBugs Python programs not found at {python_dir}")
+        return {
+            'status': 'incomplete',
+            'error': f'Python programs directory not found at {python_dir}'
+        }
     
     if not testcases_dir.exists():
-        raise RuntimeError(f"FAIL-FAST: QuixBugs Python test cases not found at {testcases_dir}")
+        return {
+            'status': 'incomplete',
+            'error': f'Test cases directory not found at {testcases_dir}'
+        }
     
-    # List available problems for debugging
+    # Count available files
     python_files = list(python_dir.glob("*.py"))
     test_files = list(testcases_dir.glob("test_*.py"))
     
-    print(f"✅ QuixBugs dataset cached at {cache_dir}")
+    print(f"✅ QuixBugs dataset ready at {dataset_path}")
     print(f"   📁 Found {len(python_files)} Python programs")
     print(f"   🧪 Found {len(test_files)} test files")
     
-    # Show sample problems for verification
-    if python_files:
-        sample_problems = [f.stem for f in python_files[:5]]
-        print(f"   📝 Sample problems: {', '.join(sample_problems)}")
+    return {
+        'status': 'ready',
+        'dataset_path': str(dataset_path),
+        'python_programs': len(python_files),
+        'test_files': len(test_files)
+    }
+
+
+def cache_quixbugs_dataset_modal(config: dict = None):
+    """Use the existing QuixBugs dataset in Modal volume - simple approach."""
+    print("📦 Using QuixBugs dataset from Modal volume...")
     
-    return cache_dir  # Return the cache directory
+    # Get dataset path from config, not hardcoded
+    if config:
+        from coral.config.path_utils import get_dataset_path
+        dataset_path = Path(get_dataset_path(config))
+    else:
+        # Fallback to default Modal path if no config provided
+        dataset_path = Path("/cache/quixbugs_dataset")
+    
+    # Check if it exists
+    if not dataset_path.exists():
+        raise RuntimeError(
+            f"FAIL-FAST: QuixBugs dataset not found at {dataset_path}. "
+            f"Dataset should be pre-cached in Modal volume at this location."
+        )
+    
+    # Verify required directories exist
+    python_dir = dataset_path / "python_programs"
+    testcases_dir = dataset_path / "python_testcases"
+    
+    if not python_dir.exists():
+        raise RuntimeError(f"FAIL-FAST: Python programs not found at {python_dir}")
+    
+    if not testcases_dir.exists():
+        raise RuntimeError(f"FAIL-FAST: Python test cases not found at {testcases_dir}")
+    
+    # List available problems for verification
+    python_files = list(python_dir.glob("*.py"))
+    test_files = list(testcases_dir.glob("test_*.py"))
+    
+    print(f"✅ QuixBugs dataset ready at {dataset_path}")
+    print(f"   📁 Found {len(python_files)} Python programs")
+    print(f"   🧪 Found {len(test_files)} test files")
+    
+    return dataset_path
 
 
-def load_quixbugs_problems_modal() -> List[Dict[str, Any]]:
+def load_quixbugs_problems_modal(config: dict = None) -> List[Dict[str, Any]]:
     """Load real QuixBugs problems (fail-fast approach)."""
-    dataset_path = cache_quixbugs_dataset_modal()
+    dataset_path = cache_quixbugs_dataset_modal(config=config)
     
     python_dir = dataset_path / "python_programs"
     problems = []

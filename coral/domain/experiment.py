@@ -45,7 +45,7 @@ def create_experiment_config(raw_config: Dict[str, Any]) -> ExperimentConfig:
     execution_raw = raw_config['execution']
     
     # Validate required evolution parameters
-    required_evo_fields = ['rank_candidates', 'alpha_candidates', 'dropout_candidates']
+    required_evo_fields = ['rank_candidates', 'alpha_candidates', 'dropout_candidates', 'target_modules']
     for field in required_evo_fields:
         if field not in evo_raw:
             raise ValueError(f"FAIL-FAST: '{field}' missing from evolution configuration")
@@ -62,7 +62,8 @@ def create_experiment_config(raw_config: Dict[str, Any]) -> ExperimentConfig:
     evolution_config = EvolutionConfig(
         rank_candidates=tuple(evo_raw['rank_candidates']),
         alpha_candidates=tuple(evo_raw['alpha_candidates']),
-        dropout_candidates=tuple(evo_raw['dropout_candidates'])
+        dropout_candidates=tuple(evo_raw['dropout_candidates']),
+        target_modules=tuple(evo_raw['target_modules'])
     )
     
     return ExperimentConfig(
@@ -109,7 +110,7 @@ def create_initial_population(config: ExperimentConfig, diversity_strength: floa
                 'rank_candidates': list(config.evolution_config.rank_candidates),
                 'alpha_candidates': list(config.evolution_config.alpha_candidates),
                 'dropout_candidates': list(config.evolution_config.dropout_candidates),
-                'target_modules': ["q_proj", "k_proj", "v_proj", "o_proj"],
+                'target_modules': list(config.evolution_config.target_modules),
                 'diversity': {
                     'mode': 'adaptive',
                     'base_strength': diversity_strength,
@@ -128,7 +129,8 @@ def create_initial_population(config: ExperimentConfig, diversity_strength: floa
         # Apply dynamic diversity strength to LoRA mapping with genome index for guaranteed diversity
         lora_config = map_features_to_lora_config(features, config_dict, diversity_strength, i)
         
-        genome = Genome(seed=ca_seed, lora_cfg=lora_config, id=genome_id, run_id=run_id)
+        # 🔥 FIX: Store CA features for consistency
+        genome = Genome(seed=ca_seed, lora_cfg=lora_config, id=genome_id, ca_features=features, run_id=run_id)
         genomes.append(genome)
         
         # Debug: Show first few genome details for verification

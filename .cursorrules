@@ -1,5 +1,12 @@
 # CoralX - Functional CORAL Evolution System
 # .cursorrules - Guidelines for working with this codebase
+#
+# 🧹 ROOT DIRECTORY CLEANUP COMPLETED (2024-06-22):
+# - Merged optimized implementations into main files (no more "optimized" duplicates)
+# - Cost-optimized Modal app is now the default (60-80% cost reduction)
+# - Root contains ONLY: coralx CLI, coral_rich_dashboard.py, coral_modal_app.py, README.md
+# - Files organized: scripts/, tools/, archive/, config/, docs/
+# - All references updated to new locations
 
 ## 🏗️ ARCHITECTURE OVERVIEW
 
@@ -499,44 +506,3 @@ def run_evolution_experiment(config):
 2. **Implement interfaces** - `DatasetProvider`, `ModelRunner`, `FitnessFn`
 3. **Add configuration** - `my_experiment_config.yaml`
 4. **Test locally** - Before Modal deployment
-
-## 🏆 SUCCESS METRICS
-
-- **Pure domain layer**: No side effects, easily testable
-- **Composable functions**: Small, focused, reusable
-- **Clean boundaries**: Clear separation between layers  
-- **Fail-fast behavior**: Explicit errors, no silent degradation
-- **Performance**: 10-60x speedup via clone-cache system
-
-## 🎯 AI ASSISTANT FINAL CHECKLIST
-
-### **Before Writing Any Code:**
-- [ ] **Which category?** Domain/Application/Infrastructure/Plugin/CLI?
-- [ ] **Reuse existing?** Search for similar functions first
-- [ ] **Minimal code?** Can this be 1-5 lines instead?
-- [ ] **Proper types?** `@dataclass(frozen=True)` for immutable data?
-
-### **Before Submitting:**
-- [ ] **Pure functions?** No side effects in domain layer?
-- [ ] **Fail-fast?** Explicit error messages with context?
-- [ ] **Composition?** Functions chain correctly?
-- [ ] **Modal pattern?** Delegates to clean services?
-
-### **AI Success Mantras:**
-1. **"Less code is better code"** - prefer deletion over addition
-2. **"Reuse over recreate"** - leverage existing pure functions
-3. **"Fail-fast over fallback"** - explicit errors beat silent failures
-4. **"Category theory predicts bugs"** - broken functors cause real problems
-5. **"Modal = container only"** - business logic goes in services
-
-## 📝 REMEMBER (Category Theory Foundation)
-
-1. **Mathematical Correctness First** - category laws prevent bugs
-2. **Radical Simplicity** - write minimum code that solves the problem
-3. **Fail-Fast Always** - explicit failures beat silent degradation
-4. **Pure Functional Composition** - build pipelines from small functions
-5. **Distributed = Category Theory** - queues restore broken functors
-
-**"Make illegal states unrepresentable"** - Use types and category theory to enforce correctness.
-
-**"Performance follows mathematical correctness"** - Fix the category theory, fix the performance. 

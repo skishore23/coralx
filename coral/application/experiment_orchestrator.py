@@ -80,7 +80,8 @@ class ExperimentOrchestrator:
             
             print(f"🏆 Evolution completed in {results.experiment_time:.2f}s")
             print(f"📊 Final population: {results.final_population.size()} genomes")
-            print(f"🎯 Best fitness: {results.best_fitness:.4f}")
+            best_fitness_display = f"{results.best_fitness:.4f}" if results.best_fitness is not None else "None"
+            print(f"🎯 Best fitness: {best_fitness_display}")
             
             return results
             

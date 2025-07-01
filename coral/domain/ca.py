@@ -21,7 +21,7 @@ class CAStateHistory:
     history: List[NDArray[np.int_]]
 
 
-def evolve(seed: CASeed) -> CAStateHistory:
+def evolve(seed: CASeed, genome_id: str = None) -> CAStateHistory:
     """Pure arrow: Seed ──▶ History."""
     state = seed.grid.copy()
     hist = [state.copy()]
@@ -81,17 +81,3 @@ def _apply_rule_fixed(neighbor_config: int, rule: int) -> int:
     # Apply rule by checking corresponding bit
     # Each rule number is treated as 8-bit pattern
     return (rule >> config_index) & 1
-
-
-def _apply_rule(neighbor_sum: int, rule: int, num_states: int) -> int:
-    """
-    DEPRECATED: Original broken implementation.
-    
-    This function caused all CA patterns to die out to zeros.
-    Kept only for reference - DO NOT USE.
-    """
-    raise NotImplementedError(
-        "FAIL-FAST: _apply_rule is deprecated due to broken behavior. "
-        "All CA patterns died out to uniform states with this implementation. "
-        "Use _apply_rule_fixed for proper CA evolution."
-    ) 

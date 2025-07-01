@@ -189,49 +189,9 @@ def _validate_config(config: Dict[str, Any]):
 
 
 def _build_coral_config(raw_config: Dict[str, Any]) -> CoralConfig:
-    """Build structured CoralConfig from raw configuration."""
-    # Build evolution configuration
-    evo_raw = raw_config['evo']
-    evo_config = EvolutionConfig(
-        rank_candidates=tuple(evo_raw['rank_candidates']),
-        alpha_candidates=tuple(evo_raw['alpha_candidates']),
-        dropout_candidates=tuple(evo_raw['dropout_candidates'])
-    )
-    
-    # Build threshold configuration
-    threshold_raw = raw_config['threshold']
-    base_thresh = threshold_raw['base_thresholds']
-    max_thresh = threshold_raw['max_thresholds']
-    
-    threshold_config = ThresholdConfig(
-        base_thresholds=ObjectiveThresholds(
-            bugfix=base_thresh['bugfix'],
-            style=base_thresh['style'],
-            security=base_thresh['security'],
-            runtime=base_thresh['runtime'],
-            syntax=base_thresh.get('syntax', 0.3)  # NEW: Default loose syntax threshold
-        ),
-        max_thresholds=ObjectiveThresholds(
-            bugfix=max_thresh['bugfix'],
-            style=max_thresh['style'],
-            security=max_thresh['security'],
-            runtime=max_thresh['runtime'],
-            syntax=max_thresh.get('syntax', 0.9)  # NEW: Default strict syntax threshold
-        ),
-        schedule=threshold_raw['schedule']
-    )
-    
-    return CoralConfig(
-        evo=evo_config,
-        threshold=threshold_config,
-        seed=raw_config['seed'],
-        execution=raw_config['execution'],
-        infra=raw_config['infra'],
-        experiment=raw_config['experiment'],
-        cache=raw_config['cache'],
-        evaluation=raw_config['evaluation'],
-        adapter_type=raw_config.get('adapter_type', 'lora')  # 🔥 FIX: Extract adapter_type from config
-    )
+    """Build enhanced CoralConfig with raw data as source of truth."""
+    # Create enhanced CoralConfig with raw data as source of truth
+    return CoralConfig(raw_config)
 
 
 def create_config_from_dict(config_dict: Dict[str, Any]) -> CoralConfig:
@@ -241,6 +201,71 @@ def create_config_from_dict(config_dict: Dict[str, Any]) -> CoralConfig:
     
     # Build structured config
     return _build_coral_config(config_dict)
+
+
+# ========== NEW: Monadic Configuration Loading Alternative ==========
+# This demonstrates how the new categorical abstractions could replace FAIL-FAST
+
+def load_config_monadic(path: str, env: Dict[str, str] = None) -> 'Result[CoralConfig, str]':
+    """
+    Monadic configuration loading using Result monad.
+    Alternative to exception-based FAIL-FAST approach.
+    Demonstrates compositional error handling.
+    """
+    # Import the new categorical types
+    from coral.domain.categorical_result import (
+        success, error, safe_call, ConfigValidation, compose_results
+    )
+    
+    if env is None:
+        env = os.environ
+    
+    def load_yaml_file(config_path: str):
+        """Load YAML file safely."""
+        config_path_obj = Path(config_path)
+        if not config_path_obj.exists():
+            raise FileNotFoundError(f"Config file not found: {config_path}")
+        
+        with open(config_path_obj) as f:
+            raw_config = yaml.safe_load(f)
+        
+        if not raw_config:
+            raise ValueError(f"Config file is empty or invalid: {config_path}")
+        
+        return raw_config
+    
+    def apply_env_overrides(config):
+        """Apply environment overrides."""
+        return _apply_env_overrides(config, env)
+    
+    def validate_config_monadic(config):
+        """Validate configuration using monadic composition."""
+        # Chain multiple validations
+        return (
+            ConfigValidation.validate_required_field(config, 'evo')
+            .bind(lambda _: ConfigValidation.validate_required_field(config, 'execution'))
+            .bind(lambda _: ConfigValidation.validate_required_field(config, 'experiment'))
+            .bind(lambda _: ConfigValidation.validate_required_field(config, 'infra'))
+            .bind(lambda _: ConfigValidation.validate_required_field(config, 'cache'))
+            .bind(lambda _: ConfigValidation.validate_required_field(config, 'threshold'))
+            .bind(lambda _: ConfigValidation.validate_required_field(config, 'evaluation'))
+            .bind(lambda _: success(config))
+        )
+    
+    def build_config(config):
+        """Build structured config."""
+        return _build_coral_config(config)
+    
+    # Compose the entire pipeline using monadic composition
+    pipeline = compose_results(
+        lambda p: load_yaml_file(p),
+        apply_env_overrides,
+        lambda c: validate_config_monadic(c).unwrap(),  # Extract from Result
+        build_config
+    )
+    
+    # Execute pipeline with safe error handling
+    return safe_call(lambda: pipeline(path), f"Failed to load config from {path}")
 
 
 def create_default_config() -> Dict[str, Any]:

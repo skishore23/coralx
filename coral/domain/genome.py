@@ -2,9 +2,12 @@
 # Genome definition - immutable combination of CA and LoRA parameters
 ###############################################################################
 from dataclasses import dataclass
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, TYPE_CHECKING
 from .ca import CASeed
 from .mapping import LoRAConfig
+
+if TYPE_CHECKING:
+    from .feature_extraction import CAFeatures
 
 
 @dataclass(frozen=True)
@@ -43,10 +46,11 @@ class MultiObjectiveScores:
 
 @dataclass(frozen=True)
 class Genome:
-    """CA seed + current LoRA params + multi-objective scores."""
+    """CA seed + current LoRA params + multi-objective scores + CA features."""
     seed: CASeed
     lora_cfg: LoRAConfig
     id: str  # Unique genome identifier
+    ca_features: Optional['CAFeatures'] = None  # 🔥 FIX: Store CA features for consistency
     fitness: Optional[float] = None
     multi_scores: Optional[MultiObjectiveScores] = None
     metadata: Optional[Dict[str, Any]] = None
@@ -58,6 +62,7 @@ class Genome:
             seed=self.seed,
             lora_cfg=self.lora_cfg,
             id=self.id,
+            ca_features=self.ca_features,  # 🔥 FIX: Preserve CA features
             fitness=fitness,
             multi_scores=self.multi_scores,
             metadata=self.metadata,
@@ -72,6 +77,7 @@ class Genome:
             seed=self.seed,
             lora_cfg=self.lora_cfg,
             id=self.id,
+            ca_features=self.ca_features,  # 🔥 FIX: Preserve CA features
             fitness=overall_fitness,
             multi_scores=scores,
             metadata=self.metadata,
@@ -84,9 +90,23 @@ class Genome:
             seed=self.seed,
             lora_cfg=self.lora_cfg,
             id=self.id,
+            ca_features=self.ca_features,  # 🔥 FIX: Preserve CA features
             fitness=self.fitness,
             multi_scores=self.multi_scores,
             metadata=metadata,
+            run_id=self.run_id
+        )
+    
+    def with_ca_features(self, ca_features: 'CAFeatures') -> 'Genome':
+        """Return new genome with CA features for consistency."""
+        return Genome(
+            seed=self.seed,
+            lora_cfg=self.lora_cfg,
+            id=self.id,
+            ca_features=ca_features,  # 🔥 FIX: Store CA features
+            fitness=self.fitness,
+            multi_scores=self.multi_scores,
+            metadata=self.metadata,
             run_id=self.run_id
         )
     

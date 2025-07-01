@@ -111,12 +111,15 @@ class QuixBugsRealDataset(DatasetProvider):
     """Real QuixBugs dataset provider using actual dataset."""
     
     def __init__(self, config: Dict[str, Any]):
+        # Store config first
+        self.config = config
+        
         # Access dataset config from experiment section  
         experiment_config = config.get('experiment', {})
         dataset_config = experiment_config.get('dataset', {})
         
-        # Use auto-detection for dataset path - adapter will find it in cache
-        self.adapter = QuixBugsRealAdapter()
+        # Use config-driven dataset path - no auto-detection allowed
+        self.adapter = QuixBugsRealAdapter(config=self.config)
         
         # 🔥 FIX: Use centralized training problems to prevent data leakage  
         # This MUST match exactly what's used in DoRA/LoRA training
@@ -179,6 +182,12 @@ class CodeLlamaRealRunner(ModelRunner):
         self.lora_cfg = lora_cfg
         self.config = config
         self.genome = genome        # ← Set BEFORE _setup_model() uses it
+        # 🔥 FIX: Cache loaded model and tokenizer for reuse across problems
+        # Safe because: Each genome gets own ModelRunner instance in Modal container
+        # Container dies after evaluation, cleaning up all memory automatically
+        self._cached_model = None
+        self._cached_tokenizer = None
+        self._cached_adapter_path = None
         self._setup_model()
     
     def _setup_model(self):
@@ -227,8 +236,8 @@ class CodeLlamaRealRunner(ModelRunner):
             # Get training config from main config
             training_config = self.config.get('training', {})
             
-            # Train with config parameters
-            return train_codellama_lora(base_ckpt, genes, save_path)
+            # Train with config parameters - PASS CONFIG!
+            return train_codellama_lora(base_ckpt, genes, save_path, config=self.config)
         
         # Use cache system
         cache_start = time.time()
@@ -253,9 +262,10 @@ class CodeLlamaRealRunner(ModelRunner):
         if max_tokens is None:
             max_tokens = gen_config.get('max_tokens', 512)
         
-        # Check if we should use Modal
+        # Check if we should use Modal (includes queue_modal)
         infra_config = self.config.get('infra', {})
-        use_modal = infra_config.get('executor') == 'modal'
+        executor_type = infra_config.get('executor')
+        use_modal = executor_type in ['modal', 'queue_modal']
         
         if use_modal:
             return self._generate_modal(prompt, max_tokens, cheap_knobs)
@@ -341,11 +351,8 @@ class CodeLlamaRealRunner(ModelRunner):
             raise RuntimeError(f"FAIL-FAST: Modal generation failed: {e}")
     
     def _generate_local(self, prompt: str, max_tokens: int, cheap_knobs=None) -> str:
-        """Local CodeLlama generation with loaded adapter."""
+        """Local CodeLlama generation with cached model for reuse."""
         try:
-            # Import domain functions and utilities
-            from coral.domain.codellama_generation import create_codellama_prompt, extract_function_from_generation
-            from coral.domain.lora_training import load_lora_adapter_with_base_model
             import torch
             
             # Get model config
@@ -354,31 +361,66 @@ class CodeLlamaRealRunner(ModelRunner):
             
             print(f"   🤖 Local generation: {base_model} + {self._adapter_path}")
             
-            # Load model with adapter
-            model, tokenizer = load_lora_adapter_with_base_model(
-                base_model_name=base_model,
-                adapter_path=self._adapter_path
-            )
+            # 🔥 FIX: Use cached model if available, otherwise load and cache
+            if (self._cached_model is None or 
+                self._cached_tokenizer is None or 
+                self._cached_adapter_path != self._adapter_path):
+                
+                print(f"   📥 Loading base model: {base_model}")
+                print(f"   🗂️  Using model cache: /cache/models")
+                print(f"   ✅ Using cached model (offline mode)")
+                
+                # Import and load model with adapter
+                from coral.domain.lora_training import load_lora_adapter_with_base_model
+                
+                self._cached_model, self._cached_tokenizer = load_lora_adapter_with_base_model(
+                    base_model_name=base_model,
+                    adapter_path=self._adapter_path
+                )
+                self._cached_adapter_path = self._adapter_path
+                print(f"   🔗 Loading LoRA adapter: {self._adapter_path}")
+                print(f"   🔧 Set padding token to EOS token: </s>")
+            else:
+                print(f"   ♻️  Reusing cached model and adapter")
             
-            # Generate parameters from config
-            gen_config = self.config.get('generation', {})
-            temperature = gen_config.get('temperature', 0.7)
-            top_p = gen_config.get('top_p', 0.9)
-            top_k = gen_config.get('top_k', 50)
+            model = self._cached_model
+            tokenizer = self._cached_tokenizer
+            
+            # 🔥 FIX: Use cheap knobs if provided (two-loop architecture), otherwise config defaults
+            if cheap_knobs is not None:
+                temperature = cheap_knobs.temperature
+                top_p = cheap_knobs.top_p
+                top_k = cheap_knobs.top_k
+                max_tokens = cheap_knobs.max_new_tokens
+                do_sample = cheap_knobs.do_sample
+                print(f"   🎛️ Using CA-derived cheap knobs: T={temperature:.3f}, p={top_p:.3f}, k={top_k}")
+            else:
+                # Fallback to config defaults
+                gen_config = self.config.get('generation', {})
+                temperature = gen_config.get('temperature', 0.7)
+                top_p = gen_config.get('top_p', 0.9)
+                top_k = gen_config.get('top_k', 50)
+                do_sample = True
+                print(f"   🔧 Using config defaults: T={temperature:.3f}, p={top_p:.3f}, k={top_k}")
             
             # Tokenize input
             inputs = tokenizer(prompt, return_tensors="pt")
             
-            # Generate
+            # FIX: Move input tensors to same device as model (GPU)
+            device = next(model.parameters()).device
+            input_ids = inputs.input_ids.to(device)
+            attention_mask = inputs.attention_mask.to(device)
+            
+            # Generate with CA-derived or config parameters
             with torch.no_grad():
                 outputs = model.generate(
-                    inputs.input_ids,
-                    attention_mask=inputs.attention_mask,
+                    input_ids,
+                    attention_mask=attention_mask,
                     max_new_tokens=max_tokens,
                     temperature=temperature,
                     top_p=top_p,
                     top_k=top_k,
-                    do_sample=True,
+                    do_sample=do_sample,
                     pad_token_id=tokenizer.eos_token_id
                 )
             
@@ -419,10 +461,9 @@ class QuixBugsRealFitness(FitnessFn):
         emergent_config = self.config.get('emergent_tracking', {})
         if emergent_config.get('enabled', False):
             try:
-                if 'output_dir' not in emergent_config:
-                    raise ValueError("FAIL-FAST: emergent_tracking.output_dir not specified in config")
-                
-                output_dir = Path(emergent_config['output_dir'])
+                # Get emergent behavior path from centralized config
+                from coral.config.path_utils import get_emergent_behavior_path
+                output_dir = Path(get_emergent_behavior_path(self.config))
                 self.emergent_tracker = SimpleEmergentTracker(output_dir)
                 print(f"🌟 Emergent behavior tracking ENABLED: {output_dir}")
                 print(f"   • Alert threshold: {emergent_config.get('alert_threshold', 0.8)}")
@@ -460,37 +501,30 @@ class QuixBugsRealFitness(FitnessFn):
         
         total_start_time = time.time()
         
-        # 🔥 FIX: Use pre-computed CA features if provided, otherwise compute them
+        # 🔥 FIX: Use pre-computed CA features from genome if available
         if ca_features is not None:
-            print(f"✅ Using pre-computed CA features (consistency ensured)")
+            print(f"✅ Using provided CA features (consistency ensured)")
             print(f"   🔬 CA FEATURES PROVIDED:")
             print(f"      • Complexity: {ca_features.complexity:.4f} (drives temperature)")
             print(f"      • Intensity: {ca_features.intensity:.4f} (drives top_p)")
             print(f"      • Periodicity: {ca_features.periodicity:.4f} (drives repetition penalty)")
             print(f"      • Convergence: {ca_features.convergence:.4f} (drives top_k)")
-        else:
-            # Fallback: compute CA features (but warn about potential inconsistency)
-            print(f"⚠️  No pre-computed CA features provided - computing fresh (may cause inconsistency)")
-            print(f"🌊 Running Cellular Automata Evolution...")
-            ca_start_time = time.time()
-            from coral.domain.ca import evolve
-            ca_history = evolve(genome.seed)  # Use domain's evolve function directly
-            ca_time = time.time() - ca_start_time
-            print(f"   ✅ CA Evolution completed in {ca_time:.2f}s")
-            print(f"   📊 Generated {len(ca_history.history)} CA states")
-            
-            # Extract CA features
-            print(f"🔍 Extracting CA Features...")
-            features_start_time = time.time()
-            from coral.domain.feature_extraction import extract_features
-            ca_features = extract_features(ca_history)
-            features_time = time.time() - features_start_time
-            print(f"   ✅ Feature extraction completed in {features_time:.2f}s")
-            print(f"   🔬 CA FEATURES EXTRACTED:")
+        elif hasattr(genome, 'ca_features') and genome.ca_features is not None:
+            print(f"✅ Using genome's stored CA features (consistency ensured)")
+            ca_features = genome.ca_features
+            print(f"   🔬 CA FEATURES FROM GENOME:")
             print(f"      • Complexity: {ca_features.complexity:.4f} (drives temperature)")
             print(f"      • Intensity: {ca_features.intensity:.4f} (drives top_p)")
             print(f"      • Periodicity: {ca_features.periodicity:.4f} (drives repetition penalty)")
             print(f"      • Convergence: {ca_features.convergence:.4f} (drives top_k)")
+        else:
+            # FAIL-FAST: No fallback computation allowed - architectural integrity required
+            raise RuntimeError(
+                f"FAIL-FAST: No CA features available for evaluation consistency. "
+                f"Genome {genome.id} missing stored CA features and none provided. "
+                f"This breaks the two-loop architecture integrity (CA → LoRA vs CA → cheap knobs). "
+                f"Fix genome creation to store CA features."
+            )
         
         # TWO-LOOP ARCHITECTURE: Generate cheap knobs from CA features
         print(f"🎛️ Generating Cheap Knobs from CA Features...")
@@ -914,38 +948,17 @@ class QuixBugsRealFitness(FitnessFn):
         return selected_problems
 
     def _classify_problem_difficulty(self, problem_name: str) -> str:
-        """Classify QuixBugs problems by difficulty based on known characteristics.
+        """Classify QuixBugs problems by difficulty using centralized constants."""
+        # Import centralized problem classifications
+        from coral.domain.dataset_constants import (
+            EASY_PROBLEMS, MEDIUM_PROBLEMS, HARD_PROBLEMS
+        )
         
-        Updated to reflect problems that actually have JSON test data available.
-        """
-        
-        # Easy problems: Simple algorithms, basic data structures
-        easy_problems = {
-            'gcd', 'bitcount', 'sqrt', 'is_valid_parenthesization',
-            'reverse_linked_list', 'flatten', 'to_base', 'get_factors'
-        }
-        
-        # Hard problems: Complex algorithms, advanced data structures
-        # FILTERED: Removed problems without JSON test data (shortest_paths, minimum_spanning_tree, etc.)
-        hard_problems = {
-            'hanoi', 'mergesort', 'quicksort', 'kheapsort',
-            'levenshtein', 'longest_common_subsequence', 'knapsack',
-            'next_permutation', 'powerset', 'subsequences'
-        }
-        
-        # Medium problems: Everything else that has JSON test data
-        medium_problems = {
-            'kth', 'lis', 'lcs_length', 'max_sublist_sum', 'pascal',
-            'bucketsort', 'find_in_sorted', 'find_first_in_sorted',
-            'next_palindrome', 'possible_change', 'rpn_eval', 'shunting_yard',
-            'sieve', 'wrap'
-        }
-        
-        if problem_name in easy_problems:
+        if problem_name in EASY_PROBLEMS:
             return 'easy'
-        elif problem_name in hard_problems:
+        elif problem_name in HARD_PROBLEMS:
             return 'hard'
-        elif problem_name in medium_problems:
+        elif problem_name in MEDIUM_PROBLEMS:
             return 'medium'
         else:
             # For any new problems not in our classification
@@ -1013,15 +1026,29 @@ class QuixBugsRealFitness(FitnessFn):
             return 0  # Fallback for parsing errors
     
     def _load_test_cases_for_problem(self, problem_name: str) -> Optional[str]:
-        """Load test cases for a specific problem using the working dataset path."""
+        """Load test cases for a specific problem using config-driven dataset path."""
         
         print(f"🔍 Loading test cases for '{problem_name}'...")
         
-        # FIXED: Use the correct Modal volume path (files are at first level)
-        dataset_path = "/cache/quixbugs_dataset"  # Direct path to dataset
+        # FIX: Get dataset path using proper PathConfig creation
+        from coral.config.path_utils import create_path_config_from_dict
+        
+        # Determine executor type from config
+        executor_type = self.config.get('infra', {}).get('executor', 'local')
+        
+        try:
+            path_config = create_path_config_from_dict(self.config, executor_type)
+            dataset_path = path_config.dataset
+        except Exception as path_error:
+            # Fallback: try to get dataset path directly from experiment config
+            print(f"⚠️  PathConfig creation failed: {path_error}")
+            experiment_config = self.config.get('experiment', {})
+            dataset_config = experiment_config.get('dataset', {})
+            dataset_path = dataset_config.get('path', '/cache/quixbugs_dataset')
+            print(f"   Using fallback dataset path: {dataset_path}")
         
         if not Path(dataset_path).exists():
-            # FAIL-FAST: No local path fallbacks allowed  
+            # FAIL-FAST: No fallback paths allowed  
             raise ValueError(
                 f"FAIL-FAST: Dataset not found at configured path: {dataset_path}. "
                 f"No fallback paths allowed - ensure dataset is properly configured and available."
@@ -1080,6 +1107,27 @@ class QuixBugsCodeLlamaRealPlugin:
         print(f"🔌 QuixBugs + CodeLlama plugin initialized")
         print(f"   📁 Dataset: {experiment_config['dataset'].get('path', 'not specified')}")
         print(f"   🤖 Model: {experiment_config['model'].get('name', 'not specified')}")
+    
+    def get_modal_config(self, coral_config) -> Dict[str, Any]:
+        """Get Modal-compatible configuration with all necessary sections."""
+        return {
+            'evo': self.config['evo'],  # Raw evo config with all fields including target_modules
+            'execution': coral_config.execution,
+            'experiment': coral_config.experiment,
+            'infra': coral_config.infra,
+            'cache': coral_config.cache,
+            'threshold': {
+                'base_thresholds': coral_config.threshold.base_thresholds.__dict__,
+                'max_thresholds': coral_config.threshold.max_thresholds.__dict__,
+                'schedule': coral_config.threshold.schedule
+            },
+            'evaluation': coral_config.evaluation,
+            'seed': coral_config.seed,
+            'adapter_type': getattr(coral_config, 'adapter_type', 'lora'),
+            'paths': self.config.get('paths', {}),  # Include paths for dataset access
+            'cheap_knobs': self.config.get('cheap_knobs', {}),  # Include cheap knobs config
+            'training': self.config.get('training', {})  # Include training config
+        }
     
     def dataset(self) -> DatasetProvider:
         """Create dataset provider from config."""

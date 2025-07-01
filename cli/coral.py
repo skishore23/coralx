@@ -16,9 +16,10 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import from coralx package structure  
 from coral.config.loader import load_config, create_default_config
-from coral.application.evolution_engine import EvolutionEngine
+from coral.application.evolution_engine import EvolutionEngine, CoralConfig
 from coral.domain.genome import Genome
 from coral.domain.ca import CASeed
+from plugins.quixbugs_codellama.plugin import QuixBugsCodeLlamaRealPlugin
 from coral.domain.neat import Population
 from coral.domain.mapping import LoRAConfig
 from infra.modal_executor import create_executor_from_config
@@ -46,7 +47,7 @@ def check_modal_available() -> bool:
 
 
 def run_experiment(config_path: str, stream_logs: bool = False) -> None:
-    """Main experiment runner - config-driven, no fallbacks."""
+    """Main experiment runner with automatic live monitoring for Modal."""
     print("🧬 CoralX - Functional CORAL Evolution System")
     print(f"🔖 Version: {get_version()}")
     print("=" * 50)
@@ -58,8 +59,157 @@ def run_experiment(config_path: str, stream_logs: bool = False) -> None:
     config = load_config(config_path)
     print(f"✅ Configuration loaded from: {config_path}")
     
-    # Check fail-fast mode
-    if config.get('system', {}).get('fail_fast', True):
+    # Check executor type and run accordingly
+    executor_type = config.infra.get('executor', 'local') if hasattr(config, 'infra') else 'local'
+    
+    if executor_type == 'modal':
+        print(f"🚀 Executor: Modal (with live monitoring)")
+        _run_modal_experiment_with_live_dashboard(config_path, config)
+    elif executor_type == 'queue_modal':
+        print(f"🚀 Executor: Queue-based Modal (clean architecture)")
+        _run_queue_modal_experiment(config_path, config)
+    else:
+        print(f"🖥️  Executor: Local")
+        _run_local_experiment(config_path, config)
+
+
+def _run_modal_experiment_with_live_dashboard(config_path: str, config: CoralConfig) -> None:
+    """Run Modal experiment with integrated live dashboard."""
+    import threading
+    import time
+    import subprocess
+    
+    print("📺 Starting Modal experiment with live monitoring...")
+    print("🎯 This will show real-time progress automatically!")
+    print("=" * 60)
+    
+    # Start the Modal experiment in background using new optimized Modal app
+    import json
+    
+    # Convert CoralConfig to dict for Modal using plugin
+    # This approach is cleaner - plugin handles config management
+    # Load raw config for plugin that expects full config dict
+    import yaml
+    with open(config_path, 'r') as f:
+        raw_config = yaml.safe_load(f)
+    
+    plugin = QuixBugsCodeLlamaRealPlugin(raw_config)
+    config_dict = plugin.get_modal_config(config)
+    
+    modal_cmd = [
+        'modal', 'run', 'coral_modal_app.py::run_experiment_modal',
+        '--config-dict', json.dumps(config_dict)
+    ]
+    
+    # Start Modal experiment process
+    print("🚀 Launching Modal experiment...")
+    modal_process = subprocess.Popen(
+        modal_cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        bufsize=1,
+        universal_newlines=True
+    )
+    
+    # Give Modal experiment time to start
+    time.sleep(3)
+    
+    # Start live monitor in a separate thread
+    def run_live_monitor():
+        try:
+            monitor_script = Path("scripts/monitor_evolution.py")
+            if monitor_script.exists():
+                print("📊 Starting live progress monitor...")
+                subprocess.run([sys.executable, str(monitor_script)])
+        except Exception as e:
+            print(f"⚠️  Live monitor failed: {e}")
+    
+    monitor_thread = threading.Thread(target=run_live_monitor, daemon=True)
+    monitor_thread.start()
+    
+    print("=" * 60)
+    print("🔥 EVOLUTION RUNNING WITH LIVE DASHBOARD!")
+    print("📺 Watch real-time progress in the monitor above")
+    print("📊 Modal logs available with: modal app logs coral-x-production")
+    print("⌨️  Press Ctrl+C to stop both experiment and monitor")
+    print("=" * 60)
+    
+    try:
+        # Stream Modal experiment output
+        for line in modal_process.stdout:
+            print(f"[Modal] {line.rstrip()}")
+        
+        # Wait for Modal experiment to complete
+        modal_process.wait()
+        
+        if modal_process.returncode == 0:
+            print("\n✅ Modal experiment completed successfully!")
+        else:
+            print(f"\n❌ Modal experiment failed with code: {modal_process.returncode}")
+            
+    except KeyboardInterrupt:
+        print("\n⚠️  User interrupted - stopping experiment and monitor...")
+        modal_process.terminate()
+        try:
+            modal_process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            modal_process.kill()
+
+
+def _run_queue_modal_experiment(config_path: str, config: CoralConfig) -> None:
+    """Run queue-based Modal experiment."""
+    import threading
+    import time
+    import subprocess
+    import json
+    import yaml
+    
+    print("🚀 Starting queue-based Modal experiment...")
+    print("⚡ Clean architecture: No function-to-function calls")
+    print("🔄 Auto-scaling workers handle all computation")
+    print("=" * 60)
+    
+    # Load raw config for queue-based execution
+    with open(config_path, 'r') as f:
+        raw_config = yaml.safe_load(f)
+    
+    # Use queue-based Modal app
+    modal_cmd = [
+        'modal', 'run', 'coral_queue_modal_app.py::run_experiment_modal',
+        '--config-dict', json.dumps(raw_config)
+    ]
+    
+    print("🚀 Launching queue-based Modal experiment...")
+    print("📋 Queue app: coral-x-queues")
+    print("🏗️ Workers will auto-scale based on queue load")
+    
+    # Run the Modal experiment
+    try:
+        result = subprocess.run(
+            modal_cmd,
+            check=True,
+            text=True
+        )
+        
+        if result.returncode == 0:
+            print("\n✅ Queue-based Modal experiment completed successfully!")
+        else:
+            print(f"\n❌ Queue-based Modal experiment failed with code: {result.returncode}")
+    
+    except subprocess.CalledProcessError as e:
+        print(f"\n❌ Queue-based Modal experiment failed: {e}")
+        raise
+    except KeyboardInterrupt:
+        print("\n⚠️  User interrupted - stopping experiment...")
+        return
+
+
+def _run_local_experiment(config_path: str, config: CoralConfig) -> None:
+    """Run local experiment (original implementation)."""
+    # Check fail-fast mode - CoralConfig has system as dict
+    system_config = getattr(config, 'system', {})
+    if isinstance(system_config, dict) and system_config.get('fail_fast', True):
         print("🚨 FAIL-FAST mode enabled - no fallbacks allowed")
     
     # Load plugin
@@ -217,6 +367,18 @@ def modal_proxy(args: list) -> None:
     cmd = ['modal'] + args
     print(f"🔄 Running: {' '.join(cmd)}")
     subprocess.run(cmd)
+
+
+def monitor_evolution() -> None:
+    """Launch real-time evolution monitor."""
+    print("📺 Starting Evolution Monitor...")
+    print(f"🔖 Version: {get_version()}")
+    
+    monitor_script = Path("scripts/monitor_evolution.py")
+    if not monitor_script.exists():
+        raise FileNotFoundError("FAIL-FAST: Monitor script not found at scripts/monitor_evolution.py")
+    
+    subprocess.run([sys.executable, str(monitor_script)])
 
 
 def create_config(config_path: str) -> None:
@@ -570,6 +732,9 @@ Version: {get_version()}
         help='Path for new configuration file'
     )
     
+    # Monitor command
+    subparsers.add_parser('monitor', help='Monitor evolution progress in real-time')
+    
     # Version command
     subparsers.add_parser('version', help='Show version')
     
@@ -604,6 +769,8 @@ Version: {get_version()}
             status(getattr(args, 'config', None))
         elif args.command == 'create-config':
             create_config(args.config_path)
+        elif args.command == 'monitor':
+            monitor_evolution()
         elif args.command == 'version':
             print(f"CoralX version {get_version()}")
         elif args.command == 'modal':

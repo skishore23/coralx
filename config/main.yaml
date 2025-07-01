@@ -1,0 +1,296 @@
+# 📁 CENTRALIZED PATH CONFIGURATION - NO HARDCODED PATHS ALLOWED
+paths:
+  modal:
+    # Modal volume paths (when executor=modal)
+    cache_root: "/cache"
+    adapters: "/cache/adapters"
+    models: "/cache/models"
+    dataset: "/cache/quixbugs_dataset"
+    progress: "/cache/evolution_progress.json"
+    emergent_behavior: "/cache/emergent_behavior"
+    emergent_alerts: "/cache/emergent_behavior/alerts.json"
+    realtime_benchmarks: "/cache/realtime_benchmarks"
+    coralx_root: "/root/coralx"
+  local:
+    # Local paths (when executor=local)
+    cache_root: "./coral_cache"
+    adapters: "./coral_cache/adapters"
+    models: "./coral_cache/models"
+    dataset: "./coral_cache/quixbugs_dataset"
+    progress: "./coral_cache/evolution_progress.json"
+    emergent_behavior: "./coral_cache/emergent_behavior"
+    emergent_alerts: "./coral_cache/emergent_behavior/alerts.json"
+    realtime_benchmarks: "./coral_cache/realtime_benchmarks"
+    coralx_root: "."
+
+cache:
+  artifacts_dir: "/cache/adapters"  # Required field
+  base_checkpoint: codellama/CodeLlama-7b-Python-hf
+  cleanup_threshold: 100
+  metadata: true
+  modal_native: true  # When true, prefers Modal volume for all caching (--executor=modal)
+  run_id: "dora_test_v1"  # 🔥 UNIQUE RUN ID - forces fresh DoRA training
+evaluation:
+  # 🧬 EVOLUTION FITNESS EVALUATION (uses CA-derived cheap knobs)
+  adaptive_testing:
+    capability_thresholds:
+      easy_cutoff: 0.3
+      medium_cutoff: 0.6
+    enable: true
+    max_easy_problems: 10
+    max_hard_problems: 8
+    max_medium_problems: 12
+  fitness_weights:
+    bugfix: 0.3      # Reduced to make room for syntax
+    runtime: 0.1     # Reduced slightly
+    security: 0.25   # Increased slightly  
+    style: 0.15      # Reduced to make room for syntax
+    syntax: 0.2      # NEW: Syntax correctness objective
+  # 📊 NOTE: This evaluation uses CA-derived parameters per genome
+  # Held-out benchmark evaluation uses SEPARATE neutral parameters
+
+# Enable simple emergent behavior tracking
+emergent_tracking:
+  enabled: true                          # Enable simple emergent behavior detection
+  # output_dir now comes from paths.{modal|local}.emergent_behavior
+  alert_threshold: 0.8                   # Confidence threshold for alerts
+  save_frequency: 20                     # Save progress every N evaluations
+evo:
+  alpha_candidates:  # Balanced for cache grouping (8 groups optimal)
+  - 4.0
+  - 8.0
+  - 16.0
+  - 24.0
+  - 32.0
+  - 48.0
+  - 64.0
+  - 96.0
+  ca:
+    grid_size:
+    - 8
+    - 8
+    initial_density: 0.3
+    rule_range:
+    - 1
+    - 255
+    steps_range:
+    - 5
+    - 25  # Increased max steps for more diversity
+  diversity:
+    # Dynamic diversity adjustment based on cache hit rates and performance
+    mode: adaptive           # Options: adaptive, fixed, aggressive
+    base_strength: 1.0       # Base diversity injection strength (1.0 = current level)
+    max_strength: 2.0        # Maximum diversity when plateau detected
+    min_strength: 0.3        # Minimum diversity for cache efficiency
+    cache_threshold: 0.8     # If cache hit rate > 80%, increase diversity
+    plateau_threshold: 0.05  # If improvement < 5% over 3 gens, increase diversity
+    plateau_window: 3        # Generations to check for plateau
+  dropout_candidates:  # Conservative grouping (5 groups optimal)
+  - 0.05
+  - 0.1
+  - 0.15
+  - 0.2
+  - 0.3
+  rank_candidates:  # Moderate grouping (6 groups optimal)
+  - 4
+  - 8
+  - 16
+  - 24
+  - 32
+  - 48
+  target_modules:
+  - q_proj
+  - k_proj
+  - v_proj
+  - o_proj
+adapter_type: "dora" # "lora" or "dora"
+execution:
+  generations: 20
+  output_dir: /Users/kishore/neat/coralx/coral_cache/results
+  population_size: 10
+  selection_mode: "pareto"
+  current_generation: 0  # For emergent behavior tracking (updated automatically)
+  
+  # 🧬 GENETIC OPERATIONS TRACKING
+  genetic_tracking_dir: "results/genetic_tracking"  # Where to save crossover/mutation data
+  survival_rate: 0.4                                # Top 40% survive each generation
+  crossover_rate: 0.7                              # 70% of new offspring from crossover
+  
+  # 🔬 AUTOMATIC HELD-OUT BENCHMARK CONFIGURATION
+  run_held_out_benchmark: true  # Enable automatic held-out benchmark after evolution
+  held_out_benchmark_config:
+    enabled: true
+    run_after_evolution: true      # Run automatically when evolution completes
+    save_combined_results: true    # Combine evolution + benchmark results
+    fail_on_benchmark_error: false # Don't fail evolution if benchmark has issues
+    # 🔥 CRITICAL: Use neutral parameters to avoid interfering with CA cheap knobs
+    neutral_parameters:
+      temperature: 0.7             # Fixed neutral (NOT CA-derived)
+      top_p: 0.9                  # Fixed neutral (NOT CA-derived) 
+      top_k: 50                   # Fixed neutral (NOT CA-derived)
+      repetition_penalty: 1.1     # Fixed neutral (NOT CA-derived)
+      max_tokens: 300             # Fixed neutral (NOT CA-derived)
+      # ⚠️  IMPORTANT: These parameters are ONLY for held-out benchmark
+      # Evolution training continues to use CA-derived cheap knobs
+    
+    # 🔄 EXECUTION FLOW WITH AUTOMATIC BENCHMARK:
+    # 1. Evolution runs with CA-derived cheap knobs (per-genome parameters)
+    # 2. Evolution completes, saves best adapter
+    # 3. Held-out benchmark runs with NEUTRAL parameters (above)
+    # 4. Results combined: evolution_results + held_out_benchmark_results
+    # 5. Scientific validation complete (zero data leakage)
+experiment:
+  dataset:
+    path: "/cache/quixbugs_dataset"  # Required path field
+    training_problems:
+    - gcd
+    - get_factors
+    - is_valid_parenthesization
+    - levenshtein
+    - longest_common_subsequence
+    - max_sublist_sum
+    - pascal
+    - reverse_linked_list
+    - hanoi
+    - mergesort
+  model:
+    name: codellama/CodeLlama-7b-Python-hf
+  name: coral_x_codellama_quixbugs_production
+  target: quixbugs_codellama
+# generation:  # ❌ REMOVED - These hardcoded values override dynamic cheap knobs
+#   do_sample: true      # Now controlled by CA-driven cheap knobs  
+#   max_tokens: 512      # Now controlled by CA features (120-350 range)
+#   temperature: 0.7     # Now controlled by CA complexity (0.3-1.2 range)
+#   top_k: 50           # Now controlled by CA convergence (15-70 range)
+#   top_p: 0.9          # Now controlled by CA intensity (0.75-0.95 range)
+
+# Two-Loop Architecture: Heavy genes + Cheap knobs
+# 
+# CODE GENERATION PARAMETER CONSTRAINTS:
+# - Temperature > 1.0: Generates gibberish, non-functional code
+# - Temperature 0.8-1.0: Creative but coherent solutions  
+# - Temperature 0.5-0.8: Balanced creativity and reliability
+# - Temperature 0.3-0.5: Conservative, deterministic solutions
+#
+# 🔥 CRITICAL SEPARATION: Evolution vs Benchmark Parameters
+# ========================================================
+# EVOLUTION TRAINING: Uses CA-derived cheap knobs (below ranges)
+# HELD-OUT BENCHMARK: Uses fixed neutral parameters (see execution.held_out_benchmark_config)
+# These are SEPARATE and do NOT interfere with each other!
+#
+cheap_knobs:
+  # 🧬 EVOLUTION PARAMETERS (CA-derived, per-genome, dynamic) - SAFER RANGES
+  temperature_range: [0.2, 0.8]        # SAFER: Prevents nested function generation  
+  top_p_range: [0.75, 0.92]           # SAFER: More focused nucleus sampling
+  top_k_range: [20, 50]               # SAFER: More focused top-k prevents chaos
+  repetition_penalty_range: [1.1, 1.3]  # SAFER: Higher minimum prevents repetition loops
+  max_tokens_range: [120, 350]        # Short to long generation
+  max_new_tokens_range: [120, 350]    # Alias for max_tokens_range (compatibility)
+  # ⚠️  These ranges are used ONLY during evolution training
+  # Held-out benchmark uses FIXED neutral parameters (temp=0.7, top_p=0.9, etc.)
+
+infra:
+  cache_volume:
+    auto_sync: true
+    local_path: /Users/kishore/neat/coralx/coral_cache
+    modal_mount: /cache
+  executor: modal  # 🚀 ALWAYS Modal - avoid Apple M4/PEFT issues
+  local:
+    max_workers: 4
+  modal:
+    app_name: coral-x-queues
+    functions:
+      # COST-OPTIMIZED RESOURCE ALLOCATIONS (Phase 2: A10G optimization)
+      evaluate_genome:
+        cpu: 8
+        gpu: A10G           # OPTIMIZED: A10G instead of A100 (60% cost reduction)
+        memory: 8192        # Further reduced for A10G
+        timeout: 900        # Reduced from 1800s
+      generate_code:
+        cpu: 4
+        gpu: A10G           # CHANGED: A10G instead of A100 (50% cost reduction)
+        memory: 8192        # Reduced from 16GB
+        timeout: 600        # Reduced from 1800s
+      run_benchmarks:
+        cpu: 8
+        gpu: A10G           # CHANGED: A10G for benchmarking
+        memory: 8192        # Reduced from 16GB
+        timeout: 1200       # Reduced timeout
+      run_experiment:
+        cpu: 8
+        gpu: A100-40GB      # Keep A100 for training
+        memory: 16384       # Reduced from 32GB
+        timeout: 14400      # Reduced from 43200s (4h instead of 12h)
+      train_lora:
+        cpu: 8
+        gpu: A100-40GB      # Keep A100 for training
+        memory: 16384       # Reduced from 32GB
+        timeout: 1200       # Reduced from 1800s
+      # CPU-ONLY FUNCTIONS (99% cost reduction - Phase 2 optimized)
+      get_progress:
+        cpu: 1
+        memory: 256         # OPTIMIZED: Ultra-minimal for JSON
+        timeout: 10         # OPTIMIZED: Faster failure detection
+      get_alerts:
+        cpu: 1
+        memory: 256         # OPTIMIZED: Ultra-minimal for JSON
+        timeout: 10         # OPTIMIZED: Faster failure detection
+      save_results:
+        cpu: 1
+        memory: 1024        # Minimal memory
+        timeout: 120
+      setup_dataset:
+        cpu: 2
+        memory: 2048        # Reduced memory
+        timeout: 300
+    image_config:
+      base: debian_slim
+      packages:
+      - torch
+      - transformers
+      - accelerate
+      - peft
+      - datasets
+      - numpy
+      - scipy
+      - scikit-learn
+      - pyyaml
+      - pytest
+      - huggingface_hub
+    volume_name: coral-x-clean-cache
+seed: 42
+system:
+  dependencies:
+  - numpy
+  - torch
+  - transformers
+  - modal
+  - yaml
+  fail_fast: true
+  version_check: true
+threshold:
+  base_thresholds:
+    bugfix: 0.25    # Start low, allow evolution to improve
+    runtime: 0.30   # Reasonable runtime performance
+    security: 0.40  # Basic security compliance
+    style: 0.35     # Basic style compliance
+    syntax: 0.3     # NEW: Start with loose syntax requirements
+  max_thresholds:
+    bugfix: 0.75    # High bugfix target over time
+    runtime: 0.80   # Good runtime performance
+    security: 0.85  # Strong security
+    style: 0.80     # Good style compliance
+    syntax: 0.9     # NEW: End with strict syntax requirements
+  schedule: sigmoid
+training:
+  adam_epsilon: 1e-8
+  batch_size: 4
+  epochs: 5
+  gradient_accumulation_steps: 8
+  learning_rate: 2e-4
+  logging_steps: 50
+  max_grad_norm: 1.0
+  save_steps: 500
+  save_strategy: steps
+  warmup_steps: 100
+  weight_decay: 0.01

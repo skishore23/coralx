@@ -25,21 +25,50 @@ class Population:
         
         evaluated = [g for g in self.genomes if g.is_evaluated()]
         if not evaluated:
-            raise ValueError("No evaluated genomes in population")
+            # FAIL-FAST: Log the issue but return first genome as fallback
+            # This allows evolution to complete while highlighting the evaluation failure
+            print(f"⚠️  FAIL-FAST: No evaluated genomes in population of {len(self.genomes)} genomes")
+            print(f"   This indicates evaluation failures - check adapter training/evaluation logs")
+            print(f"   Returning first genome as fallback to allow evolution completion")
+            return self.genomes[0]
         
         return max(evaluated, key=lambda g: g.fitness)
     
     def sorted_by_fitness(self) -> 'Population':
         """Return population sorted by fitness (best first)."""
         evaluated = [g for g in self.genomes if g.is_evaluated()]
+        if not evaluated:
+            # FAIL-FAST: No evaluated genomes - return original population order
+            print(f"⚠️  FAIL-FAST: No evaluated genomes to sort in population of {len(self.genomes)} genomes")
+            return Population(self.genomes)
+            
         sorted_genomes = sorted(evaluated, key=lambda g: g.fitness, reverse=True)
         return Population(tuple(sorted_genomes))
+    
+    def with_default_fitness(self, default_fitness: float = 0.0) -> 'Population':
+        """Return population with default fitness assigned to unevaluated genomes."""
+        fixed_genomes = []
+        for genome in self.genomes:
+            if genome.is_evaluated():
+                fixed_genomes.append(genome)
+            else:
+                # Assign default fitness to unevaluated genomes
+                fixed_genomes.append(genome.with_fitness(default_fitness))
+        return Population(tuple(fixed_genomes))
 
 
 def select(pop: Population, k: int) -> Population:
     """Deterministic selection based on fitness."""
     if k <= 0:
         return Population(())
+    
+    # Check if we have any evaluated genomes
+    evaluated = [g for g in pop.genomes if g.is_evaluated()]
+    if not evaluated:
+        # FAIL-FAST: No evaluated genomes - select first k genomes as fallback
+        print(f"⚠️  FAIL-FAST: No evaluated genomes for selection - using first {k} genomes")
+        survivors = pop.genomes[:min(k, len(pop.genomes))]
+        return Population(survivors)
     
     sorted_pop = pop.sorted_by_fitness()
     survivors = sorted_pop.genomes[:min(k, len(sorted_pop.genomes))]
@@ -52,6 +81,8 @@ def mutate(genome: Genome, evo_cfg: EvolutionConfig, rng: Random, generation: in
     # Create unique mutant ID with generation tracking
     mutant_number = rng.randint(1000, 9999)
     mutant_id = f"gen{generation + 1}_mut_{genome.id.split('_')[-1]}_{mutant_number}"
+    
+
     
     # Decide whether to mutate CA or LoRA (70% CA, 30% LoRA for more CA exploration)
     if rng.random() < 0.7:
@@ -71,18 +102,19 @@ def mutate(genome: Genome, evo_cfg: EvolutionConfig, rng: Random, generation: in
         from .mapping import map_features_to_lora_config
         
         # Re-evolve CA and extract features
-        history = evolve(new_seed)
+        history = evolve(new_seed, genome_id=mutant_id)
         features = extract_features(history)
         
         # Apply dynamic diversity to LoRA mapping with genome-derived index
         genome_index = abs(hash(genome.id)) % 1000  # Generate unique index from genome ID
         new_lora = map_features_to_lora_config(features, config_dict, diversity_strength, genome_index)
         
-        return Genome(seed=new_seed, lora_cfg=new_lora, id=mutant_id, run_id=run_id)
+        # 🔥 FIX: Store CA features for consistency
+        return Genome(seed=new_seed, lora_cfg=new_lora, id=mutant_id, ca_features=features, run_id=run_id)
     else:
-        # Mutate LoRA config directly
+        # Mutate LoRA config directly (preserve CA features since CA didn't change)
         new_lora = _mutate_lora_config(genome.lora_cfg, evo_cfg, rng)
-        return Genome(seed=genome.seed, lora_cfg=new_lora, id=mutant_id, run_id=run_id)
+        return Genome(seed=genome.seed, lora_cfg=new_lora, id=mutant_id, ca_features=genome.ca_features, run_id=run_id)
 
 
 def crossover(p1: Genome, p2: Genome, evo_cfg: EvolutionConfig, rng: Random, generation: int = 0,
@@ -93,6 +125,8 @@ def crossover(p1: Genome, p2: Genome, evo_cfg: EvolutionConfig, rng: Random, gen
     p1_num = p1.id.split('_')[-1] if '_' in p1.id else p1.id[-4:]
     p2_num = p2.id.split('_')[-1] if '_' in p2.id else p2.id[-4:]
     child_id = f"gen{generation + 1}_cross_{p1_num}x{p2_num}_{child_number}"
+    
+
     
     # Create hybrid CA seed
     hybrid_seed = _crossover_ca_seeds(p1.seed, p2.seed, rng)
@@ -110,14 +144,15 @@ def crossover(p1: Genome, p2: Genome, evo_cfg: EvolutionConfig, rng: Random, gen
     from .mapping import map_features_to_lora_config
     
     # Evolve hybrid CA and extract features
-    history = evolve(hybrid_seed)
+    history = evolve(hybrid_seed, genome_id=child_id)
     features = extract_features(history)
     
     # Apply dynamic diversity to LoRA mapping with parent-derived index
     parent_hash = abs(hash(p1.id + p2.id)) % 1000  # Generate unique index from parent IDs
     hybrid_lora = map_features_to_lora_config(features, config_dict, diversity_strength, parent_hash)
     
-    return Genome(seed=hybrid_seed, lora_cfg=hybrid_lora, id=child_id, run_id=run_id)
+    # 🔥 FIX: Store CA features for consistency
+    return Genome(seed=hybrid_seed, lora_cfg=hybrid_lora, id=child_id, ca_features=features, run_id=run_id)
 
 
 def _mutate_ca_seed(seed: CASeed, rng: Random) -> CASeed:

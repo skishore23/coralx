@@ -4,6 +4,8 @@
 from dataclasses import dataclass
 from typing import Tuple, Dict, Any
 import numpy as np
+
+from coral.domain.categorical_result import Result
 from .feature_extraction import CAFeatures
 
 
@@ -27,6 +29,7 @@ class EvolutionConfig:
     rank_candidates: Tuple[int, ...]
     alpha_candidates: Tuple[float, ...]  # Changed from range to discrete candidates
     dropout_candidates: Tuple[float, ...]  # Changed from range to discrete candidates
+    target_modules: Tuple[str, ...]  # Target modules for adapter training
 
 
 def map_features_to_lora_config(features: CAFeatures, config: Dict[str, Any], 
@@ -57,7 +60,8 @@ def map_features_to_lora_config(features: CAFeatures, config: Dict[str, Any],
     evo_cfg = EvolutionConfig(
         rank_candidates=tuple(evo_raw['rank_candidates']),
         alpha_candidates=tuple(evo_raw['alpha_candidates']),
-        dropout_candidates=tuple(evo_raw['dropout_candidates'])
+        dropout_candidates=tuple(evo_raw['dropout_candidates']),
+        target_modules=tuple(evo_raw['target_modules'])
     )
     
     # ENHANCED DIVERSITY MAPPING: Use genome index as additional entropy
@@ -327,4 +331,127 @@ def deserialize_heavy_genes_from_modal(heavy_key_list: list) -> tuple:
     target_modules = tuple(target_modules_list) if isinstance(target_modules_list, list) else target_modules_list
     
     # Return properly structured tuple (always 6 elements for current format)
-    return (rank, alpha, dropout, target_modules, adapter_type, run_id) 
+    return (rank, alpha, dropout, target_modules, adapter_type, run_id)
+
+
+# ========== NEW: Monadic Feature Mapping ==========
+# Demonstrates compositional error handling vs exception-based FAIL-FAST
+
+def map_features_to_lora_config_monadic(features: CAFeatures, 
+                                       config: 'CoralConfig',  # ✅ ENHANCED CONFIG TYPE
+                                       diversity_strength: float = 1.0, 
+                                       genome_index: int = 0) -> 'Result[AdapterConfig, str]':
+    """
+    NEW: Monadic feature mapping using Result monad with enhanced config.
+    No more type detection needed - config provides both dict and structured access.
+    """
+    from coral.domain.categorical_result import success, error
+    
+    print(f"🧮 MONADIC FEATURE MAPPING:")
+    print(f"   • Using Result monad for compositional error handling")
+    print(f"   • Automatic error propagation through pipeline")
+    
+    try:
+        # ✅ CLEAN: Structured access (lazy-loaded)
+        evo_cfg = config.evo
+        
+        # ✅ CLEAN: Dict access  
+        adapter_type = config.get('adapter_type', 'lora')
+        
+        # ✅ DELETE: All the complex validation and type detection!
+        
+        # Apply enhanced diversity mapping (reuse existing pure function)
+        rank = _map_with_enhanced_diversity(features, evo_cfg.rank_candidates, 'rank', diversity_strength, genome_index)
+        alpha = _map_with_enhanced_diversity(features, evo_cfg.alpha_candidates, 'alpha', diversity_strength, genome_index) 
+        dropout = _map_with_enhanced_diversity(features, evo_cfg.dropout_candidates, 'dropout', diversity_strength, genome_index)
+        
+        # Create final configuration  
+        adapter_config = AdapterConfig(
+            r=rank,
+            alpha=alpha,
+            dropout=dropout,
+            target_modules=evo_cfg.target_modules,
+            adapter_type=adapter_type
+        )
+        
+        print(f"   • Monadic composition: Success")
+        print(f"   • Generated config: rank={rank}, alpha={alpha}, dropout={dropout}")
+        
+        return success(adapter_config)
+        
+    except Exception as e:
+        return error(f"Feature mapping failed: {str(e)}")
+
+
+def safe_extract_features(ca_history) -> 'Result[CAFeatures, str]':
+    """
+    NEW: Safe feature extraction using Result monad.
+    Demonstrates error handling for feature extraction pipeline.
+    """
+    from coral.domain.categorical_result import safe_call
+    from coral.domain.feature_extraction import extract_features
+    
+    print(f"🧮 SAFE FEATURE EXTRACTION:")
+    print(f"   • Using monadic error handling")
+    
+    # Use safe_call to convert exceptions to Result
+    result = safe_call(
+        lambda: extract_features(ca_history),
+        "Feature extraction failed"
+    )
+    
+    if result.is_success():
+        features = result.unwrap()
+        print(f"   • Extraction: Success")
+        print(f"   • Features: complexity={features.complexity:.3f}, intensity={features.intensity:.3f}")
+    else:
+        print(f"   • Extraction: Failed - {result.unwrap_error()}")
+    
+    return result
+
+
+def compose_ca_pipeline_monadic(ca_seed, config=None) -> 'Result[AdapterConfig, str]':
+    """
+    NEW: Complete CA → LoRA pipeline using monadic composition with enhanced config.
+    Uses YAML-driven configuration with automatic loading.
+    """
+    from coral.domain.categorical_result import safe_call
+    from coral.domain.ca import evolve
+    
+    print(f"🧮 MONADIC CA → LORA PIPELINE:")
+    print(f"   • Full compositional pipeline with automatic error propagation")
+    
+    # Use provided config or load from YAML (no hardcoded defaults)
+    if config is None:
+        try:
+            from coral.config.loader import load_config
+            # Try to load a real config file for demonstration
+            config_files = ["config/test.yaml", "config/quick_test.yaml", "config/main.yaml"]
+            for config_file in config_files:
+                try:
+                    config = load_config(config_file)
+                    print(f"   • Loaded configuration from {config_file}")
+                    break
+                except:
+                    continue
+            
+            if config is None:
+                raise ValueError("No valid configuration file found")
+                
+        except Exception as e:
+            from coral.domain.categorical_result import error
+            return error(f"Could not load configuration: {str(e)}")
+    
+    # Monadic pipeline composition
+    result = (
+        safe_call(lambda: evolve(ca_seed), "CA evolution failed")
+        .bind(lambda history: safe_extract_features(history))
+        .bind(lambda features: map_features_to_lora_config_monadic(features, config))
+    )
+    
+    if result.is_success():
+        print(f"   • Pipeline: Complete success")
+    else:
+        print(f"   • Pipeline: Failed at some stage - {result.unwrap_error()}")
+    
+    return result 

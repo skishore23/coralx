@@ -101,7 +101,8 @@ def run_evolution_experiment_modal(config_dict: Dict[str, Any]) -> Dict[str, Any
             executor=executor,
             model_factory=plugin.model_factory(),
             dataset=plugin.dataset(),
-            run_id=run_id  # Pass run_id from config
+            run_id=run_id,  # Pass run_id from config
+            raw_config=config_dict  # CRITICAL: Pass raw config for training
         )
         print("✅ Evolution engine ready")
         
@@ -131,7 +132,8 @@ def run_evolution_experiment_modal(config_dict: Dict[str, Any]) -> Dict[str, Any
         print("=" * 80)
         print(f"🏆 Evolution completed in {results.experiment_time:.2f}s")
         print(f"📊 Final population: {results.final_population.size()} genomes")
-        print(f"🎯 Best fitness: {results.best_fitness:.4f}")
+        best_fitness_display = f"{results.best_fitness:.4f}" if results.best_fitness is not None else "None"
+        print(f"🎯 Best fitness: {best_fitness_display}")
         
         # Log best genome details if available
         try:
@@ -173,6 +175,10 @@ def run_evolution_experiment_modal(config_dict: Dict[str, Any]) -> Dict[str, Any
         }
 
 
+# REMOVED: Unused self-contained evaluation function 
+# Using original working fitness function instead
+
+
 def evaluate_genome_modal(genome_data: Dict[str, Any], config: Dict[str, Any]) -> Dict[str, Any]:
     """
     TWO-LOOP ARCHITECTURE: Use plugin's full multi-objective evaluation.
@@ -206,11 +212,24 @@ def evaluate_genome_modal(genome_data: Dict[str, Any], config: Dict[str, Any]) -
                 adapter_type=lora_data.get('adapter_type', 'lora')  # 🔥 FIX: Explicit default for backward compatibility (removed task_type)
             )
             
-            # Reconstruct Genome with correct run_id
+            # 🔥 FIX: Reconstruct CA features for consistency
+            ca_features = None
+            ca_features_data = genome_data.get('ca_features')
+            if ca_features_data is not None:
+                from coral.domain.feature_extraction import CAFeatures
+                ca_features = CAFeatures(
+                    complexity=ca_features_data.get('complexity', 0.5),
+                    intensity=ca_features_data.get('intensity', 0.5),
+                    periodicity=ca_features_data.get('periodicity', 0.5),
+                    convergence=ca_features_data.get('convergence', 0.5)
+                )
+            
+            # Reconstruct Genome with correct run_id and CA features
             genome = Genome(
                 seed=ca_seed,
                 lora_cfg=lora_cfg,
                 id=genome_data['id'],
+                ca_features=ca_features,  # 🔥 FIX: Include CA features
                 run_id=genome_data.get('run_id')  # 🔥 FIX: Get run_id from top level, not lora_config
             )
             
@@ -290,15 +309,39 @@ def evaluate_genome_modal(genome_data: Dict[str, Any], config: Dict[str, Any]) -
         # Create plugin with full config
         plugin = QuixBugsCodeLlamaRealPlugin(config)
         
-        # Create model runner for this genome
-        model_factory = plugin.model_factory()
-        model = model_factory(genome.lora_cfg, genome)
+        # Check if adapter path is provided (skip training, use pre-trained adapter)
+        adapter_path = config.get('adapter_path')
+        if adapter_path:
+            print(f"🚀 Using pre-trained adapter: {adapter_path}")
+            # Create model runner that uses existing adapter (no training)
+            model_factory = plugin.model_factory()
+            # Create a mock genome with the adapter path already set
+            from pathlib import Path
+            if not Path(adapter_path).exists():
+                raise RuntimeError(f"FAIL-FAST: Pre-trained adapter not found: {adapter_path}")
+            
+            # Override the plugin's model setup to use the pre-trained adapter
+            # We'll need to create a model that points to the existing adapter
+            from plugins.quixbugs_codellama.plugin import CodeLlamaRealRunner
+            model = CodeLlamaRealRunner(
+                lora_cfg=genome.lora_cfg,
+                config=config,
+                genome=genome
+            )
+            # Set the adapter path directly to skip training
+            model._adapter_path = adapter_path
+            model._model_loaded = True
+        else:
+            print(f"🏗️  No adapter path provided - will train adapter during model creation")
+            # Create model runner for this genome (will do training)
+            model_factory = plugin.model_factory()
+            model = model_factory(genome.lora_cfg, genome)
         
         # Load dataset
         dataset_provider = plugin.dataset()
         problems = dataset_provider.problems()
         
-        # Get fitness function and evaluate using FULL TWO-LOOP ARCHITECTURE
+        # Get fitness function and evaluate using FULL TWO-LOOP ARCHITECTURE (RESTORE WORKING VERSION)
         fitness_fn = plugin.fitness_fn()
         
         print(f"🎛️ Using FITNESS FUNCTION for full two-loop evaluation...")
@@ -352,44 +395,19 @@ def evaluate_genome_modal(genome_data: Dict[str, Any], config: Dict[str, Any]) -
 
 
 def load_real_test_cases_modal(problem_name: str, dataset_path: str) -> str:
-    """Load real test cases from QuixBugs dataset in Modal environment - FAIL-FAST."""
+    """Load real test cases from QuixBugs dataset - FAIL-FAST."""
     from pathlib import Path
     
-    # Handle path translation for Modal vs local environments
-    if dataset_path.startswith('/cache/'):
-        # Modal environment - use configured path from config first, then fallbacks
-        configured_path = Path(dataset_path)
-        modal_dataset_paths = [
-            configured_path,  # Use the configured path first
-            Path("/cache/quixbugs_dataset"),  # Main Modal volume path - CORRECT PATH
-        ]
-        
-        # Check if dataset is already available
-        dataset_root = None
-        for path in modal_dataset_paths:
-            if path.exists():
-                dataset_root = path
-                print(f"✅ Found dataset at: {path}")
-                break
-        
-        # If not found, try to set up dataset
-        if dataset_root is None:
-            print(f"📦 QuixBugs dataset not found, setting up in Modal...")
-            try:
-                from infra.modal.dataset_service import cache_quixbugs_dataset_modal
-                dataset_root = cache_quixbugs_dataset_modal()
-            except Exception as setup_error:
-                raise RuntimeError(
-                    f"FAIL-FAST: Could not set up QuixBugs dataset in Modal: {setup_error}"
-                )
-    else:
-        # Local environment - use configured path
-        dataset_root = Path(dataset_path)
-        if not dataset_root.exists():
-            raise RuntimeError(
-                f"FAIL-FAST: Local dataset path does not exist: '{dataset_path}'. "
-                f"Check dataset configuration."
-            )
+    # Use the dataset_path parameter (which comes from config)
+    dataset_root = Path(dataset_path)
+    
+    # Fail fast if path doesn't exist - don't try to auto-setup
+    if not dataset_root.exists():
+        raise RuntimeError(
+            f"FAIL-FAST: Dataset path does not exist: '{dataset_path}'. "
+            f"Dataset should be pre-cached at this location. "
+            f"Check your config paths.modal.dataset setting."
+        )
     
     print(f"✅ Using QuixBugs dataset at: {dataset_root}")
     

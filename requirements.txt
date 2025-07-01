@@ -16,6 +16,9 @@ peft>=0.7.0
 accelerate>=0.25.0
 datasets>=2.14.0
 
+# Terminal UI for dashboard
+rich>=13.0.0
+
 # Development dependencies (optional)
 # pytest>=6.0.0
 # black>=22.0.0
