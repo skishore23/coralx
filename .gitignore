@@ -111,4 +111,13 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini 
 
-examples
+# Examples
+examples/
+
+# Data
+data/
+
+# Results
+results/
+
+cache

@@ -453,6 +453,9 @@ def _load_plugin(config):
     
     if target == 'quixbugs_codellama':
         return QuixBugsCodeLlamaRealPlugin(config.experiment)
+    elif target == 'fakenews_gemma3n':
+        from plugins.fakenews_gemma3n.plugin import MultiModalAISafetyPlugin
+        return MultiModalAISafetyPlugin(config.experiment)
     else:
         raise ValueError(f"FAIL-FAST: Unknown plugin target: {target}")
 
