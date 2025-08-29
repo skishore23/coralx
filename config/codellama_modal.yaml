@@ -1,0 +1,115 @@
+cache:
+  artifacts_dir: /cache/adapters
+  base_checkpoint: codellama/CodeLlama-7b-Python-hf
+  cleanup_threshold: 50
+  metadata: true
+  modal_native: true
+  run_id: codellama_modal
+
+cheap_knobs:
+  max_tokens_range: [100, 300]
+  repetition_penalty_range: [1.0, 1.2]
+  temperature_range: [0.3, 0.8]
+  top_k_range: [20, 50]
+  top_p_range: [0.85, 0.95]
+
+diversity:
+  base_strength: 1.0
+  mode: adaptive
+
+evaluation:
+  baseline_testing:
+    confidence_threshold: 0.6
+    enabled: true
+    improvement_threshold: 0.05
+    multiple_attempts: 3
+    prompt_styles:
+    - 'Fix the bug in this Python function:\n\n{code}\n\nCorrected version:'
+    - 'Debug this Python code:\n\n{code}\n\nSolution:'
+    test_samples: 20
+  fitness_weights:
+    bugfix: 0.4
+    runtime: 0.15
+    security: 0.2
+    style: 0.15
+    syntax: 0.1
+  test_samples: 15
+
+evo:
+  alpha_candidates: [8, 16, 32]
+  ca:
+    grid_size: [4, 4]
+    initial_density: 0.3
+    rule_range: [30, 150]
+    steps_range: [5, 15]
+  dropout_candidates: [0.05, 0.1, 0.15]
+  rank_candidates: [8, 16, 32]
+  target_modules: [q_proj, k_proj, v_proj, o_proj]
+
+execution:
+  crossover_rate: 0.7
+  current_generation: 0
+  generations: 3
+  output_dir: /cache/runs/current
+  population_size: 6
+  run_held_out_benchmark: true
+  selection_mode: tournament
+  survival_rate: 0.5
+
+experiment:
+  dataset:
+    datasets: [quixbugs]
+    max_samples: 50
+    path: ./datasets/quixbugs
+  model:
+    max_seq_length: 512
+    name: codellama/CodeLlama-7b-Python-hf
+    simulation_mode: false
+  name: codellama_modal_evolution
+  target: quixbugs_codellama
+
+infra:
+  executor: modal
+
+organization:
+  auto_cleanup: true
+  preserve_runs: 10
+  run_id_format: run_%Y%m%d_%H%M%S
+  use_run_ids: true
+
+paths:
+  cache: /cache
+  datasets: /cache/datasets
+  logs: /cache/logs
+  runs: /cache/runs
+
+seed: 42
+
+threshold:
+  base_thresholds:
+    bugfix: 0.3
+    runtime: 0.3
+    security: 0.4
+    style: 0.3
+    syntax: 0.2
+  max_thresholds:
+    bugfix: 0.8
+    runtime: 0.7
+    security: 0.9
+    style: 0.7
+    syntax: 0.8
+  schedule: sigmoid
+
+training:
+  adam_epsilon: 1e-8
+  batch_size: 2
+  epochs: 2
+  gradient_accumulation_steps: 4
+  learning_rate: 2e-4
+  logging_steps: 10
+  max_grad_norm: 1.0
+  max_steps: 100
+  save_steps: 50
+  save_strategy: steps
+  warmup_steps: 10
+  weight_decay: 0.01

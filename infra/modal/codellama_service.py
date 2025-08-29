@@ -10,7 +10,7 @@ Side effects:
 import time as time_module
 from typing import Dict, Tuple, Optional, Any
 from pathlib import Path
-from coral.domain.codellama_generation import GenerationRequest, GenerationResult, create_codellama_prompt, extract_function_from_generation
+from plugins.quixbugs_codellama.codellama_generation import GenerationRequest, GenerationResult, create_codellama_prompt, extract_function_from_generation
 from infra.adapter_cache import is_modal_environment
 
 

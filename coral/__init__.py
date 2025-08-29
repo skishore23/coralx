@@ -1,1 +1,0 @@
-# CoralX - Functional CORAL Implementation 

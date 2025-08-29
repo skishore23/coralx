@@ -10,74 +10,20 @@ from dataclasses import dataclass
 import json
 
 # Import from coralx package structure
-from coral.domain.mapping import LoRAConfig
+from core.domain.mapping import LoRAConfig
 
 
 def is_modal_environment() -> bool:
-    """Detect if running in Modal environment - robust detection."""
-    # Primary check: Modal-specific environment variables
-    modal_vars = [
-        'MODAL_TASK_ID',        # Set by Modal during function execution
-        'MODAL_ENVIRONMENT',    # Set by Modal runtime
-        'MODAL_FUNCTION_ID',    # Set by Modal for function context
-        'MODAL_APP_ID'          # Set by Modal for app context
-    ]
-    
-    has_modal_vars = any(var in os.environ for var in modal_vars)
-    
-    # Secondary check: /cache volume exists (Modal volume mount)
-    has_cache_volume = os.path.exists('/cache')
-    
-    # Tertiary check: Modal-specific paths in container
-    has_modal_paths = (
-        os.path.exists('/root/coralx') or  # Modal app mount
-        os.path.exists('/pkg/modal') or    # Modal runtime
-        'modal' in os.environ.get('PYTHONPATH', '').lower()
-    )
-    
-    # Environment check: running inside Modal container
-    is_modal_container = (
-        os.environ.get('HOSTNAME', '').startswith('modal-') or
-        'modal' in os.environ.get('HOME', '').lower() or
-        '/root' == os.environ.get('HOME', '')  # Common Modal container home
-    )
-    
-    # Robust detection: any strong Modal indicator
-    is_modal = has_modal_vars or (has_cache_volume and (has_modal_paths or is_modal_container))
-    
-    # Debug logging for troubleshooting
-    if has_cache_volume:  # Only log when /cache exists to avoid spam
-        print(f"🔍 Modal environment detection:")
-        print(f"   • Modal env vars: {has_modal_vars}")
-        print(f"   • Cache volume: {has_cache_volume}")
-        print(f"   • Modal paths: {has_modal_paths}")
-        print(f"   • Modal container: {is_modal_container}")
-        print(f"   • Final decision: {'MODAL' if is_modal else 'LOCAL'}")
-    
-    return is_modal
+    """Detect if running in Modal environment."""
+    return any(var in os.environ for var in ['MODAL_TASK_ID', 'MODAL_ENVIRONMENT']) or os.path.exists('/cache')
 
 
 def get_storage_paths(config: 'CacheConfig') -> Tuple[str, str]:
-    """Get primary and secondary storage paths - MODAL-NATIVE when configured."""
+    """Get storage paths - Modal volume when in Modal environment."""
     if is_modal_environment():
-        # Modal environment: always use Modal volume
-        primary_path = "/cache/adapters"
-        secondary_path = None  # No sync needed in Modal
-        print(f"🎯 Modal environment: {primary_path}")
+        return "/cache/adapters", None
     else:
-        # Local environment: respect modal_native preference
-        if config.modal_native and os.path.exists("/cache"):
-            # Local machine with Modal volume access - use Modal volume as primary
-            primary_path = "/cache/adapters"
-            secondary_path = str(Path(config.artifacts_dir).resolve()) if config.auto_sync else None
-            print(f"🔄 Modal-native mode: {primary_path}" + (f" (backup: {secondary_path})" if secondary_path else ""))
-        else:
-            # Pure local environment or modal_native=false
-            primary_path = str(Path(config.artifacts_dir).resolve())
-            secondary_path = None
-            print(f"💻 Local-only mode: {primary_path}")
-    
-    return primary_path, secondary_path
+        return str(Path(config.artifacts_dir).resolve()), None
 
 
 @dataclass(frozen=True)
@@ -137,9 +83,9 @@ class CacheConfig:
 
 
 def create_cache_config_from_dict(config_dict: Dict[str, Any]) -> CacheConfig:
-    """Create CacheConfig from configuration dictionary - FAIL-FAST."""
+    """Create CacheConfig from configuration dictionary."""
     if 'cache' not in config_dict:
-        raise ValueError("FAIL-FAST: 'cache' section missing from configuration")
+        raise ValueError("  'cache' section missing from configuration")
     
     cache_config = config_dict['cache']
     
@@ -147,7 +93,7 @@ def create_cache_config_from_dict(config_dict: Dict[str, Any]) -> CacheConfig:
     required_fields = ['artifacts_dir', 'base_checkpoint']
     for field in required_fields:
         if field not in cache_config:
-            raise ValueError(f"FAIL-FAST: '{field}' missing from cache configuration")
+            raise ValueError(f"  '{field}' missing from cache configuration")
     
     # Get volume config for auto-sync
     volume_config = config_dict.get('infra', {}).get('cache_volume', {})
@@ -194,7 +140,7 @@ class AdapterCache:
     def get_or_train_adapter(self, 
                            heavy_genes: HeavyGenes,  # 🔥 FIX: Expect specific type, not arbitrary input
                            trainer_fn: Callable[[HeavyGenes, str], str]) -> str:
-        """Get adapter path, training if not cached - MODAL-OPTIMIZED.
+        """Get adapter path, training if not cached.
         
         Args:
             heavy_genes: HeavyGenes object (use HeavyGenes.from_lora_config() to create)
@@ -206,7 +152,7 @@ class AdapterCache:
         # Validate input type for clarity
         if not isinstance(heavy_genes, HeavyGenes):
             raise TypeError(
-                f"FAIL-FAST: Expected HeavyGenes object, got {type(heavy_genes)}. "
+                f"  Expected HeavyGenes object, got {type(heavy_genes)}. "
                 f"Use HeavyGenes.from_lora_config() to create from LoRAConfig."
             )
         
@@ -235,23 +181,9 @@ class AdapterCache:
             self._cache[cache_hash] = str(adapter_path)
             return str(adapter_path)
         
-        # SIMPLIFIED: Skip complex syncing logic if in Modal environment
-        # When running --executor=modal, everything should be Modal-native
+        # Modal-native only - no syncing complexity
         if is_modal_environment():
             print(f"🎯 Modal-native execution: no syncing needed")
-        else:
-            # Check secondary storage ONLY for local-primary execution
-            if self.secondary_path and self.config.auto_sync and Path(self.secondary_path).exists():
-                secondary_adapter_path = Path(self.secondary_path) / f"adapter_{heavy_genes.to_hash()}"
-                if secondary_adapter_path.exists() and secondary_adapter_path.is_dir():
-                    print(f"🔄 SYNC: Found adapter in secondary storage")
-                    print(f"   📥 Source: {secondary_adapter_path}")
-                    print(f"   📁 Target: {adapter_path}")
-                    
-                    # Sync from secondary to primary
-                    if self._sync_adapter_from_secondary(secondary_adapter_path, adapter_path):
-                        self._cache[cache_hash] = str(adapter_path)
-                        return str(adapter_path)
         
         # 🔥 CRITICAL FIX: Try volume reload before declaring cache miss
         if is_modal_environment():
@@ -374,24 +306,6 @@ class AdapterCache:
         adapter_path = self.artifacts_dir / f"adapter_{cache_hash}"
         return str(adapter_path)
     
-    def _sync_adapter_from_secondary(self, source_path: Path, target_path: Path) -> bool:
-        """Sync adapter from secondary storage to primary cache."""
-        try:
-            import shutil
-            
-            target_path.parent.mkdir(parents=True, exist_ok=True)
-            
-            if target_path.exists():
-                shutil.rmtree(target_path)
-            
-            shutil.copytree(source_path, target_path, dirs_exist_ok=True)
-            
-            print(f"✅ Adapter synced successfully from secondary storage")
-            return True
-            
-        except Exception as e:
-            print(f"❌ Failed to sync adapter from secondary storage: {e}")
-            return False
     
     def _save_metadata(self, heavy_genes: HeavyGenes, adapter_path: Path) -> None:
         """Save metadata for cached adapter."""
@@ -850,13 +764,13 @@ _cache_instance: Optional[AdapterCache] = None
 
 
 def get_adapter_cache(config: Optional[CacheConfig] = None) -> AdapterCache:
-    """Get global adapter cache instance - FAIL-FAST."""
+    """Get global adapter cache instance."""
     global _cache_instance
     
     if _cache_instance is None:
         if config is None:
             raise ValueError(
-                "FAIL-FAST: AdapterCache requires configuration on first access. "
+                "  AdapterCache requires configuration on first access. "
                 "No default configuration allowed."
             )
         _cache_instance = AdapterCache(config)
@@ -867,7 +781,7 @@ def get_adapter_cache(config: Optional[CacheConfig] = None) -> AdapterCache:
 def get_or_train_adapter(heavy_genes: HeavyGenes,  # 🔥 FIX: Expect specific type, not arbitrary input
                         trainer_fn: Callable[[HeavyGenes, str], str],
                         cache_config: CacheConfig) -> str:
-        """Convenience function for getting or training adapters - FAIL-FAST.
+        """Convenience function for getting or training adapters.
         
         Args:
             heavy_genes: HeavyGenes object (use HeavyGenes.from_lora_config() to create)
@@ -878,7 +792,7 @@ def get_or_train_adapter(heavy_genes: HeavyGenes,  # 🔥 FIX: Expect specific t
             str: Path to adapter
         """
         if cache_config is None:
-            raise ValueError("FAIL-FAST: cache_config is required")
+            raise ValueError("  cache_config is required")
         
         cache = get_adapter_cache(cache_config)
         return cache.get_or_train_adapter(heavy_genes, trainer_fn) 

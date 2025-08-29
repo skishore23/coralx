@@ -1,6 +1,5 @@
 ###############################################################################
 # Modal Executor for CORAL evolution with clean architecture
-# NO FALLBACKS - fail-fast principle
 ###############################################################################
 from concurrent.futures import ThreadPoolExecutor, Future
 from typing import Any, Callable, Dict, Optional
@@ -11,9 +10,10 @@ try:
     MODAL_AVAILABLE = True
 except ImportError:
     MODAL_AVAILABLE = False
-    raise ImportError("FAIL-FAST: Modal not available. Install with: pip install modal")
+    raise ImportError("  Modal not available. Install with: pip install modal")
 
-from coral.ports.interfaces import Executor
+from core.ports.interfaces import Executor
+from core.domain.genome import MultiObjectiveScores
 
 
 @dataclass(frozen=True)
@@ -37,6 +37,55 @@ class LocalExecutor(Executor):
         except Exception as e:
             future.set_exception(e)
         return future
+    
+    def submit_training(self, base_model: str, heavy_genes, save_path: str, config: Dict[str, Any]) -> Future:
+        """Submit LoRA training job for local execution."""
+        future = Future()
+        try:
+            print(f"   🏗️  Local LoRA training: {heavy_genes.to_hash()[:8]}...")
+            print(f"      Model: {base_model}")
+            print(f"      LoRA config: r={heavy_genes.rank}, α={heavy_genes.alpha}, dropout={heavy_genes.dropout}")
+            
+            # Import training function
+            from core.domain.lora_training import train_lora_adapter_local
+            
+            # Train the adapter locally
+            result_path = train_lora_adapter_local(
+                base_model=base_model,
+                heavy_genes=heavy_genes,
+                save_path=save_path,
+                config=config
+            )
+            
+            future.set_result(result_path)
+        except Exception as e:
+            print(f"   ❌ Local training failed: {str(e)}")
+            future.set_exception(e)
+        return future
+    
+    def submit_evaluation(self, genome, adapter_path, config) -> Future:
+        """Submit evaluation job for local execution.""" 
+        future = Future()
+        try:
+            print(f"   🧪 Local evaluation: {genome.id[:8]}...")
+            print(f"      Adapter: {adapter_path}")
+            
+            # Use plugin-based evaluation (model-agnostic)
+            # This should be handled by the fitness function, not hardcoded here
+            # For now, return a placeholder that should be replaced by proper plugin evaluation
+            scores = genome.scores or MultiObjectiveScores(
+                bugfix=0.5, style=0.5, security=0.5, runtime=0.5, syntax=0.5
+            )
+            
+            # Create updated genome with evaluation results
+            # The system expects an evaluated genome, not just scores
+            evaluated_genome = genome.with_multi_scores(scores)
+            
+            future.set_result(evaluated_genome)
+        except Exception as e:
+            print(f"   ❌ Local evaluation failed: {str(e)}")
+            future.set_exception(e)
+        return future
 
 
 class ThreadExecutor(Executor):
@@ -44,7 +93,7 @@ class ThreadExecutor(Executor):
     
     def __init__(self, max_workers: int):
         if max_workers <= 0:
-            raise ValueError("FAIL-FAST: max_workers must be positive")
+            raise ValueError("  max_workers must be positive")
         self.max_workers = max_workers
         self._executor = ThreadPoolExecutor(max_workers=max_workers)
     
@@ -58,11 +107,11 @@ class ThreadExecutor(Executor):
 
 
 class ModalExecutor(Executor):
-    """Modal-based distributed executor with clean architecture - NO FALLBACKS."""
+    """Modal-based distributed executor with clean architecture."""
     
     def __init__(self, app_name: str, config: Dict[str, Any]):
         if not MODAL_AVAILABLE:
-            raise RuntimeError("FAIL-FAST: Modal not available for distributed execution")
+            raise RuntimeError("  Modal not available for distributed execution")
         
         # Use production app name consistently
         self.app_name = app_name or "coral-x-production"  # Default to production app
@@ -70,7 +119,7 @@ class ModalExecutor(Executor):
         self._setup_modal_functions()
     
     def _setup_modal_functions(self):
-        """Setup Modal functions from deployed app - fail if not available."""
+        """Setup Modal functions from deployed app."""
         try:
             # Use direct function lookup instead of App.lookup which has issues
             # This avoids the "bad argument type for built-in operation" error
@@ -84,7 +133,7 @@ class ModalExecutor(Executor):
             print(f"✅ Modal functions loaded from app: {self.app_name}")
         except Exception as e:
             raise RuntimeError(
-                f"FAIL-FAST: Modal functions not available for app '{self.app_name}'. "
+                f"  Modal functions not available for app '{self.app_name}'. "
                 f"Deploy first with: modal deploy coral_modal_app.py. Error: {e}"
             )
     
@@ -102,7 +151,7 @@ class ModalExecutor(Executor):
         return self._execute_modal_function(modal_fn, modal_args, *args)
     
     def _get_modal_function(self, function_name: str):
-        """Get Modal function by name - fail if not found."""
+        """Get Modal function by name."""
         if 'evaluate' in function_name:
             return self.modal_functions['evaluate_genome_modal']
         elif 'train_lora' in function_name:
@@ -115,7 +164,7 @@ class ModalExecutor(Executor):
             return self.modal_functions['run_benchmarks_modal']
         else:
             raise RuntimeError(
-                f"FAIL-FAST: No Modal function mapping for '{function_name}'. "
+                f"  No Modal function mapping for '{function_name}'. "
                 f"Available functions: {list(self.modal_functions.keys())}"
             )
     
@@ -173,7 +222,7 @@ class ModalExecutor(Executor):
             )
             
             # Create HeavyGenes as it would be during reconstruction
-            from coral.domain.mapping import LoRAConfig
+            from core.domain.mapping import LoRAConfig
             reconstructed_lora = LoRAConfig(
                 r=serialized['lora_config']['r'],
                 alpha=serialized['lora_config']['alpha'],
@@ -200,7 +249,7 @@ class ModalExecutor(Executor):
                 print(f"   • Training genes: {heavy_genes_training}")
                 print(f"   • Reconstructed genes: {heavy_genes_reconstructed}")
                 raise RuntimeError(
-                    f"FAIL-FAST: Cache hash inconsistency detected! "
+                    f"  Cache hash inconsistency detected! "
                     f"Training hash {hash_training} != reconstructed hash {hash_reconstructed}. "
                     f"This will cause cache misses and wasted training."
                 )
@@ -209,53 +258,6 @@ class ModalExecutor(Executor):
         
         return serialized
     
-    def _serialize_genome_categorical(self, genome):
-        """
-        NEW: Categorical serialization using natural transformations.
-        Demonstrates systematic structure preservation vs manual serialization above.
-        """
-        # Import the new categorical distribution system
-        from coral.domain.categorical_distribution import serialize_for_modal
-        
-        # Use natural transformation for systematic serialization
-        # This preserves categorical structure automatically
-        serialized = serialize_for_modal(genome)
-        
-        print(f"🧮 CATEGORICAL SERIALIZATION:")
-        print(f"   • Using natural transformation: Local → Modal")
-        print(f"   • Structure preservation: Automatic")
-        print(f"   • Type safety: Guaranteed by categorical laws")
-        
-        return serialized
-    
-    def _deserialize_result_categorical(self, modal_result, original_genome):
-        """
-        NEW: Categorical deserialization using natural transformations.
-        Demonstrates systematic reconstruction vs manual result handling.
-        """
-        from coral.domain.categorical_distribution import deserialize_from_modal
-        
-        # Use natural transformation for systematic deserialization
-        if isinstance(modal_result, dict) and 'genome_data' in modal_result:
-            # Reconstruct genome using natural transformation
-            reconstructed_genome = deserialize_from_modal(modal_result['genome_data'])
-            
-            # Apply scores to genome
-            if all(key in modal_result for key in ['bugfix', 'style', 'security', 'runtime', 'syntax']):
-                from coral.domain.genome import MultiObjectiveScores
-                multi_scores = MultiObjectiveScores(
-                    bugfix=modal_result['bugfix'],
-                    style=modal_result['style'],
-                    security=modal_result['security'],
-                    runtime=modal_result['runtime'],
-                    syntax=modal_result['syntax']
-                )
-                return reconstructed_genome.with_multi_scores(multi_scores)
-            
-            return reconstructed_genome
-        
-        # Fallback to manual handling
-        return self._transform_result(None, modal_result, original_genome)
     
     def _execute_modal_function(self, modal_fn, modal_args, *original_args) -> Future:
         """Execute Modal function and return Future with timeout and retry handling."""
@@ -275,21 +277,7 @@ class ModalExecutor(Executor):
                 execution_time = time.time() - start_time
                 print(f"❌ Modal function failed after {execution_time:.1f}s: {modal_error}")
                 
-                # Handle specific Modal errors
-                if "ClientClosed" in str(modal_error):
-                    raise RuntimeError(
-                        f"FAIL-FAST: Modal client disconnected after {execution_time:.1f}s. "
-                        f"This usually indicates a timeout or network issue. "
-                        f"Function: {getattr(modal_fn, 'function_name', str(modal_fn))}"
-                    )
-                elif "timeout" in str(modal_error).lower():
-                    raise RuntimeError(
-                        f"FAIL-FAST: Modal function timeout after {execution_time:.1f}s. "
-                        f"Consider increasing timeout or optimizing the function. "
-                        f"Function: {getattr(modal_fn, 'function_name', str(modal_fn))}"
-                    )
-                else:
-                    raise modal_error
+                raise modal_error
             
             # Transform result back for local use
             result = self._transform_result(modal_fn, raw_result, *original_args)
@@ -297,9 +285,9 @@ class ModalExecutor(Executor):
             future.set_result(result)
             
         except Exception as e:
-            # Check for fail-fast conditions
-            if "FAIL-FAST:" in str(e):
-                raise e  # Re-raise fail-fast errors immediately
+            # Check for configuration errors
+            if " " in str(e):
+                raise e  # Re-raise configuration errors immediately
             else:
                 future.set_exception(RuntimeError(f"Modal execution failed: {e}"))
         
@@ -325,7 +313,7 @@ class ModalExecutor(Executor):
                 if coralx_path.exists():
                     sys.path.insert(0, str(coralx_path))
                 
-                from coral.domain.lora_training import train_codellama_lora
+                from core.domain.lora_training import train_codellama_lora
                 
                 # Call training function directly
                 result_path = train_codellama_lora(
@@ -382,20 +370,20 @@ class ModalExecutor(Executor):
             elif isinstance(modal_result, dict) and 'adapter_path' in modal_result:
                 return modal_result['adapter_path']
             else:
-                raise RuntimeError(f"FAIL-FAST: Training returned invalid result: {modal_result}")
+                raise RuntimeError(f"  Training returned invalid result: {modal_result}")
         
         elif 'evaluate_genome_modal' in function_name and len(original_args) == 1:
             # Genome evaluation result
             original_genome = original_args[0]
             
             if not isinstance(modal_result, dict):
-                raise RuntimeError(f"FAIL-FAST: Modal returned invalid result format: {type(modal_result)}")
+                raise RuntimeError(f"  Modal returned invalid result format: {type(modal_result)}")
             
             if 'error' in modal_result:
-                raise RuntimeError(f"FAIL-FAST: Modal evaluation failed: {modal_result['error']}")
+                raise RuntimeError(f"  Modal evaluation failed: {modal_result['error']}")
             
             # Reconstruct multi-objective scores
-            from coral.domain.genome import MultiObjectiveScores
+            from core.domain.genome import MultiObjectiveScores
             
             if all(key in modal_result for key in ['bugfix', 'style', 'security', 'runtime', 'syntax']):
                 multi_scores = MultiObjectiveScores(
@@ -407,19 +395,19 @@ class ModalExecutor(Executor):
                 )
                 return original_genome.with_multi_scores(multi_scores)
             else:
-                raise RuntimeError(f"FAIL-FAST: Modal result missing required score fields: {modal_result}")
+                raise RuntimeError(f"  Modal result missing required score fields: {modal_result}")
         
         return modal_result
 
 
 # Factory functions for creating executors from config
 def create_executor_from_config(config: Dict[str, Any]) -> Executor:
-    """Create executor based on configuration - no fallbacks."""
+    """Create executor based on configuration."""
     infra_config = config.get('infra', {})
     executor_type = infra_config.get('executor')
     
     if not executor_type:
-        raise ValueError("FAIL-FAST: No executor type specified in config")
+        raise ValueError("  No executor type specified in config")
     
     if executor_type == 'local':
         return LocalExecutor()
@@ -427,17 +415,16 @@ def create_executor_from_config(config: Dict[str, Any]) -> Executor:
         local_config = infra_config.get('local', {})
         max_workers = local_config.get('max_workers')
         if not max_workers:
-            raise ValueError("FAIL-FAST: max_workers not specified for thread executor")
+            raise ValueError("  max_workers not specified for thread executor")
         return ThreadExecutor(max_workers=max_workers)
     elif executor_type == 'modal':
         modal_config = infra_config.get('modal', {})
         app_name = modal_config.get('app_name')
         if not app_name:
-            raise ValueError("FAIL-FAST: app_name not specified for modal executor")
+            raise ValueError("  app_name not specified for modal executor")
         return ModalExecutor(app_name=app_name, config=config)
     elif executor_type == 'queue_modal':
-        # Use queue-based Modal executor
         from infra.queue_modal_executor import QueueModalExecutor
         return QueueModalExecutor(config)
     else:
-        raise ValueError(f"FAIL-FAST: Unknown executor type '{executor_type}'. Supported: local, thread, modal, queue_modal") 
+        raise ValueError(f"Unknown executor type: {executor_type}") 

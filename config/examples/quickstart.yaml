@@ -1,0 +1,95 @@
+# Quickstart demo configuration [not be useful for real-world applications this is just an example of how to use the framework]
+
+cache:
+  artifacts_dir: ./cache/adapters
+  base_checkpoint: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+  cleanup_threshold: 10
+  metadata: true
+  modal_native: false
+  run_id: quickstart
+
+execution:
+  generations: 1
+  population_size: 4
+  output_dir: ./runs/current
+  selection_mode: tournament
+  survival_rate: 0.5
+  crossover_rate: 0.7
+  current_generation: 0
+
+evo:
+  ca:
+    grid_size: [3, 3]
+    initial_density: 0.3
+    rule_range: [30, 90]
+    steps_range: [3, 8]
+  rank_candidates: [4, 8]
+  alpha_candidates: [8, 16]
+  dropout_candidates: [0.1]
+  target_modules: ["q_proj", "v_proj"]
+
+experiment:
+  name: coralx_quickstart
+  target: fakenews_tinyllama
+  dataset:
+    path: ./datasets/fake_news
+    max_samples: 10
+    datasets: ["fake_news"]
+  model:
+    name: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+    max_seq_length: 128
+    simulation_mode: false
+
+evaluation:
+  test_samples: 5
+  fitness_weights:
+    bugfix: 0.3
+    runtime: 0.1
+    security: 0.3
+    style: 0.2
+    syntax: 0.1
+  baseline_testing:
+    enabled: true
+    test_samples: 5
+    confidence_threshold: 0.6
+    improvement_threshold: 0.05
+    multiple_attempts: 1
+    prompt_styles:
+      - 'Classify this news as fake or real:\n\n{text}\n\nClassification:'
+
+training:
+  epochs: 1
+  batch_size: 1
+  learning_rate: 1e-4
+  max_steps: 10
+  gradient_accumulation_steps: 1
+  warmup_steps: 2
+  max_grad_norm: 1.0
+  save_steps: 10
+  logging_steps: 5
+
+paths:
+  cache: ./cache
+  datasets: ./datasets
+  logs: ./logs
+  runs: ./runs
+
+infra:
+  executor: local
+
+threshold:
+  base_thresholds:
+    bugfix: 0.3
+    runtime: 0.3
+    security: 0.4
+    style: 0.3
+    syntax: 0.2
+  max_thresholds:
+    bugfix: 0.8
+    runtime: 0.7
+    security: 0.9
+    style: 0.7
+    syntax: 0.8
+  schedule: sigmoid
+
+seed: 32

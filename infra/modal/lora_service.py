@@ -18,9 +18,9 @@ def train_lora_adapter_modal(base_model: str, heavy_key, save_path: str, config:
         str: Path to saved adapter
     """
     # Import domain training logic and adapter cache
-    from coral.domain.lora_training import train_codellama_lora
+    from core.domain.lora_training import train_codellama_lora
     from infra.adapter_cache import HeavyGenes
-    from coral.domain.mapping import deserialize_heavy_genes_from_modal
+    from core.domain.mapping import deserialize_heavy_genes_from_modal
     
     # Convert serialized heavy_key back to HeavyGenes object
     if isinstance(heavy_key, (list, tuple)):
@@ -32,7 +32,7 @@ def train_lora_adapter_modal(base_model: str, heavy_key, save_path: str, config:
         heavy_genes = heavy_key
     else:
         raise ValueError(
-            f"FAIL-FAST: Invalid heavy_key format: {type(heavy_key)}. "
+            f"  Invalid heavy_key format: {type(heavy_key)}. "
             f"Expected list/tuple (Modal format) or HeavyGenes object."
         )
     

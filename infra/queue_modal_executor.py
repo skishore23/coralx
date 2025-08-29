@@ -12,7 +12,7 @@ from typing import Any, Callable, Dict, List, Optional
 from dataclasses import dataclass
 import json
 
-from coral.ports.interfaces import Executor
+from core.ports.interfaces import Executor
 
 
 @dataclass
@@ -91,7 +91,7 @@ class QueueModalExecutor(Executor):
         elif 'evaluate' in function_name.lower():
             return self._submit_test_job(*args, **kwargs)
         else:
-            raise RuntimeError(f"FAIL-FAST: Unknown function type for queue routing: {function_name}")
+            raise RuntimeError(f"  Unknown function type for queue routing: {function_name}")
     
     def submit_training(self, base_model: str, heavy_genes, save_path: str, config: Dict[str, Any]) -> Future:
         """Submit training job to training queue."""
@@ -157,7 +157,7 @@ class QueueModalExecutor(Executor):
         if len(args) >= 4:
             return self.submit_training(args[0], args[1], args[2], args[3])
         else:
-            raise RuntimeError("FAIL-FAST: Invalid training job arguments")
+            raise RuntimeError("  Invalid training job arguments")
     
     def _submit_generation_job(self, *args, **kwargs) -> Future:
         """Submit generation job to generation queue."""
@@ -187,7 +187,7 @@ class QueueModalExecutor(Executor):
         if len(args) >= 2:
             return self.submit_evaluation(args[0], args[1], args[2] if len(args) > 2 else self.config)
         else:
-            raise RuntimeError("FAIL-FAST: Invalid test job arguments")
+            raise RuntimeError("  Invalid test job arguments")
     
     def _serialize_genome(self, genome):
         """
@@ -249,26 +249,15 @@ class QueueModalExecutor(Executor):
         Natural transformation: μ: Queue[Result] → Local[Result]
         ENHANCED: Handles orphaned results from multiple evaluation processes.
         """
-        print("📡 Enhanced result collector - handles orphaned results, adaptive polling")
-        
-        consecutive_empty_polls = 0
-        adaptive_timeout = 5  # Start with 5s polling
-        max_adaptive_timeout = 120  # Max 2 minutes between polls
+        timeout = 30
         orphan_count = 0
         
         while True:
             try:
                 # η^(-1): Natural transformation from queue to local result
-                result = self.results_queue.get(timeout=adaptive_timeout)
+                result = self.results_queue.get(timeout=timeout)
                 if result is None:
-                    consecutive_empty_polls += 1
-                    # Dynamic backoff - increase polling interval when no results
-                    adaptive_timeout = min(adaptive_timeout * 1.2, max_adaptive_timeout)
                     continue
-                
-                # Reset adaptive polling on successful result
-                consecutive_empty_polls = 0
-                adaptive_timeout = 5  # Reset to fast polling
                 
                 job_id = result.get('job_id')
                 job_type = result.get('job_type', 'unknown')
@@ -315,33 +304,12 @@ class QueueModalExecutor(Executor):
                         print(f"     ✅ Orphaned but successful: {genome_id}")
                 
             except Exception as e:
-                # Handle errors while preserving categorical structure
-                error_str = str(e).lower()
-                exception_type = type(e).__name__.lower()
-                
-                # Check for cancellation/shutdown conditions (FAIL-FAST: Exit gracefully on shutdown)
-                is_cancellation = (
-                    exception_type in ['clientclosed', 'cancelled', 'asynciocancellederror'] or
-                    'client' in error_str and 'closed' in error_str or
-                    'cancell' in error_str or
-                    'shutdown' in error_str
-                )
-                
-                if is_cancellation:
-                    print(f"🛑 Result collector graceful shutdown: {type(e).__name__}")
-                    break  # Exit result collection loop gracefully
-                
-                if any(timeout_word in error_str for timeout_word in ['timeout', 'empty', 'no message', '_queue.empty']):
-                    # Normal empty queue - categorical structure intact
-                    consecutive_empty_polls += 1
-                    # Adaptive backoff when consistently empty
-                    if consecutive_empty_polls > 3:
-                        adaptive_timeout = min(adaptive_timeout * 1.5, max_adaptive_timeout)
-                        print(f"📡 Adaptive backoff: {adaptive_timeout:.1f}s (empty polls: {consecutive_empty_polls})")
+                if 'timeout' in str(e).lower() or 'empty' in str(e).lower():
                     continue
+                elif 'cancel' in str(e).lower() or 'shutdown' in str(e).lower():
+                    break
                 else:
-                    # Silent retry - errors are handled by retry mechanism
-                    time.sleep(2)  # Brief pause before retry
+                    time.sleep(2)
     
     def _process_queue_result(self, result):
         """Process result from queue based on job type."""
@@ -355,7 +323,7 @@ class QueueModalExecutor(Executor):
         elif job_type == 'evaluation':
             # Evaluation result - reconstruct genome with scores
             if not isinstance(raw_result, dict):
-                raise RuntimeError(f"FAIL-FAST: Invalid evaluation result format: {type(raw_result)}")
+                raise RuntimeError(f"  Invalid evaluation result format: {type(raw_result)}")
             
             # FIX: Properly reconstruct Genome object from evaluation result
             return self._reconstruct_genome_from_result(raw_result)
@@ -373,11 +341,11 @@ class QueueModalExecutor(Executor):
         Category theory compliant: Inverse of _serialize_genome.
         🔥 FIX: Now reconstructs CA features for consistency.
         """
-        from coral.domain.genome import Genome
-        from coral.domain.ca import CASeed
-        from coral.domain.mapping import LoRAConfig
-        from coral.domain.genome import MultiObjectiveScores
-        from coral.domain.feature_extraction import CAFeatures
+        from core.domain.genome import Genome
+        from core.domain.ca import CASeed
+        from core.domain.mapping import LoRAConfig
+        from core.domain.genome import MultiObjectiveScores
+        from core.domain.feature_extraction import CAFeatures
         import numpy as np
         
         # Extract genome data from result

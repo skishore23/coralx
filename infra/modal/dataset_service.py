@@ -14,10 +14,10 @@ def setup_quixbugs_dataset_modal(config: dict = None) -> dict:
     
     # Get dataset path from config, not hardcoded
     if config:
-        from coral.config.path_utils import get_dataset_path
+        from core.config.path_utils import get_dataset_path
         dataset_path = Path(get_dataset_path(config))
     else:
-        # Fallback to default Modal path if no config provided
+        # Use default Modal path if no config provided
         dataset_path = Path("/cache/quixbugs_dataset")
     
     if not dataset_path.exists():
@@ -64,16 +64,16 @@ def cache_quixbugs_dataset_modal(config: dict = None):
     
     # Get dataset path from config, not hardcoded
     if config:
-        from coral.config.path_utils import get_dataset_path
+        from core.config.path_utils import get_dataset_path
         dataset_path = Path(get_dataset_path(config))
     else:
-        # Fallback to default Modal path if no config provided
+        # Use default Modal path if no config provided
         dataset_path = Path("/cache/quixbugs_dataset")
     
     # Check if it exists
     if not dataset_path.exists():
         raise RuntimeError(
-            f"FAIL-FAST: QuixBugs dataset not found at {dataset_path}. "
+            f"  QuixBugs dataset not found at {dataset_path}. "
             f"Dataset should be pre-cached in Modal volume at this location."
         )
     
@@ -82,10 +82,10 @@ def cache_quixbugs_dataset_modal(config: dict = None):
     testcases_dir = dataset_path / "python_testcases"
     
     if not python_dir.exists():
-        raise RuntimeError(f"FAIL-FAST: Python programs not found at {python_dir}")
+        raise RuntimeError(f"  Python programs not found at {python_dir}")
     
     if not testcases_dir.exists():
-        raise RuntimeError(f"FAIL-FAST: Python test cases not found at {testcases_dir}")
+        raise RuntimeError(f"  Python test cases not found at {testcases_dir}")
     
     # List available problems for verification
     python_files = list(python_dir.glob("*.py"))
@@ -99,7 +99,7 @@ def cache_quixbugs_dataset_modal(config: dict = None):
 
 
 def load_quixbugs_problems_modal(config: dict = None) -> List[Dict[str, Any]]:
-    """Load real QuixBugs problems (fail-fast approach)."""
+    """Load real QuixBugs problems."""
     dataset_path = cache_quixbugs_dataset_modal(config=config)
     
     python_dir = dataset_path / "python_programs"

@@ -1,0 +1,93 @@
+# Random Search Baseline Configuration
+# Purpose: Random sampling baseline for comparison with CORAL-X evolution [not be useful for real-world applications this is just an example of how to use the framework]
+
+cache:
+  artifacts_dir: ./cache/adapters
+  base_checkpoint: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+  cleanup_threshold: 10
+  modal_native: false
+  run_id: baseline_random
+
+execution:
+  generations: 1
+  population_size: 8          # Sample 8 random configurations
+  output_dir: ./runs/current
+  selection_mode: tournament  # Use tournament but with high survival rate
+  survival_rate: 1.0          # Keep all for comparison
+  crossover_rate: 0.0         # No crossover - pure random
+  current_generation: 0
+
+evo:
+  ca:
+    grid_size: [4, 4]
+    initial_density: 0.3
+    rule_range: [30, 150]     # Full rule range for randomness
+    steps_range: [5, 15]      # Full step range
+  rank_candidates: [4, 8, 16, 32]    # All rank options
+  alpha_candidates: [8, 16, 32]      # All alpha options
+  dropout_candidates: [0.05, 0.1, 0.15, 0.2]  # All dropout options
+  target_modules: ["q_proj", "v_proj"]
+
+experiment:
+  name: random_search_baseline
+  target: fakenews_tinyllama
+  dataset:
+    path: ./datasets/fake_news
+    max_samples: 20
+    datasets: ["fake_news"]
+  model:
+    name: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+    max_seq_length: 128
+    simulation_mode: false
+
+evaluation:
+  test_samples: 10
+  fitness_weights:
+    bugfix: 0.3
+    runtime: 0.1
+    security: 0.3
+    style: 0.2
+    syntax: 0.1
+  baseline_testing:
+    enabled: true
+    test_samples: 10
+    confidence_threshold: 0.6
+    improvement_threshold: 0.05
+    multiple_attempts: 2
+    prompt_styles:
+      - 'Classify this news as fake or real:\n\n{text}\n\nClassification:'
+
+training:
+  epochs: 1
+  batch_size: 2
+  learning_rate: 1e-4
+  max_steps: 20
+  gradient_accumulation_steps: 2
+  warmup_steps: 2
+  max_grad_norm: 1.0
+
+paths:
+  cache: ./cache
+  datasets: ./datasets
+  logs: ./logs
+  runs: ./runs
+
+infra:
+  executor: local
+
+threshold:
+  base_thresholds:
+    bugfix: 0.3
+    runtime: 0.3
+    security: 0.4
+    style: 0.3
+    syntax: 0.2
+  max_thresholds:
+    bugfix: 0.8
+    runtime: 0.7
+    security: 0.9
+    style: 0.7
+    syntax: 0.8
+  schedule: sigmoid
+
+seed: 12345

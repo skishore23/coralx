@@ -1,0 +1,154 @@
+cache:
+  artifacts_dir: ./cache/adapters
+  base_checkpoint: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+  cleanup_threshold: 50
+  metadata: true
+  modal_native: false
+  run_id: tinyllama_local
+cheap_knobs:
+  max_tokens_range:
+  - 100
+  - 200
+  repetition_penalty_range:
+  - 1.0
+  - 1.2
+  temperature_range:
+  - 0.3
+  - 0.8
+  top_k_range:
+  - 20
+  - 50
+  top_p_range:
+  - 0.85
+  - 0.95
+diversity:
+  base_strength: 1.0
+  mode: adaptive
+evaluation:
+  baseline_testing:
+    confidence_threshold: 0.6
+    enabled: true
+    improvement_threshold: 0.05
+    multiple_attempts: 3
+    prompt_styles:
+    - 'Classify this news as fake or real:
+
+
+      {text}
+
+
+      Classification:'
+    - 'Is this news article real or fake?
+
+
+      {text}
+
+
+      Answer:'
+    - 'Determine if this is genuine news or misinformation:
+
+
+      {text}
+
+
+      Result:'
+    test_samples: 30
+  fitness_weights:
+    bugfix: 0.3
+    runtime: 0.1
+    security: 0.3
+    style: 0.2
+    syntax: 0.1
+  test_samples: 10
+evo:
+  alpha_candidates:
+  - 8
+  - 16
+  - 32
+  ca:
+    grid_size:
+    - 4
+    - 4
+    initial_density: 0.3
+    rule_range:
+    - 30
+    - 150
+    steps_range:
+    - 5
+    - 15
+  dropout_candidates:
+  - 0.05
+  - 0.1
+  - 0.15
+  rank_candidates:
+  - 4
+  - 8
+  - 16
+  target_modules:
+  - q_proj
+  - v_proj
+execution:
+  crossover_rate: 0.7
+  current_generation: 0
+  generations: 10
+  output_dir: ./runs/current
+  population_size: 10
+  run_held_out_benchmark: false
+  selection_mode: tournament
+  survival_rate: 0.5
+experiment:
+  dataset:
+    dataset_path: ./datasets/fake_news
+    datasets:
+    - fake_news
+    max_samples: 20
+    path: ./datasets/fake_news
+  evaluation:
+    test_samples: 10
+  model:
+    max_seq_length: 128
+    model_name: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+    name: TinyLlama/TinyLlama-1.1B-Chat-v1.0
+    simulation_mode: false
+  name: tinyllama_local_evolution
+  target: fakenews_tinyllama
+infra:
+  executor: local
+organization:
+  auto_cleanup: true
+  preserve_runs: 10
+  run_id_format: run_%Y%m%d_%H%M%S
+  use_run_ids: true
+paths:
+  cache: ./cache
+  datasets: ./datasets
+  logs: ./logs
+  runs: ./runs
+seed: 42
+threshold:
+  base_thresholds:
+    bugfix: 0.3
+    runtime: 0.3
+    security: 0.4
+    style: 0.3
+    syntax: 0.2
+  max_thresholds:
+    bugfix: 0.8
+    runtime: 0.7
+    security: 0.9
+    style: 0.7
+    syntax: 0.8
+  schedule: sigmoid
+training:
+  adam_epsilon: 1e-8
+  batch_size: 2
+  epochs: 1
+  gradient_accumulation_steps: 2
+  learning_rate: 1e-4
+  logging_steps: 5
+  max_grad_norm: 1.0
+  max_steps: 20
+  save_steps: 20
+  save_strategy: steps
+  warmup_steps: 2
+  weight_decay: 0.01

@@ -4,7 +4,7 @@ Infrastructure layer - handles Modal-specific experiment orchestration.
 """
 import time
 from typing import Dict, Any
-from coral.domain.experiment import ExperimentConfig, ExperimentResults, create_experiment_config, create_initial_population, create_experiment_result
+from core.domain.experiment import ExperimentConfig, ExperimentResults, create_experiment_config, create_initial_population, create_experiment_result
 
 
 
@@ -44,7 +44,7 @@ def run_evolution_experiment_modal(config_dict: Dict[str, Any]) -> Dict[str, Any
     # Add coralx to Python path
     coralx_path = Path("/root/coralx")
     if not coralx_path.exists():
-        raise RuntimeError("FAIL-FAST: CoralX codebase not found in Modal environment")
+        raise RuntimeError("  CoralX codebase not found in Modal environment")
     sys.path.insert(0, str(coralx_path))
     
     print(f"✅ Domain modules imported successfully")
@@ -52,10 +52,10 @@ def run_evolution_experiment_modal(config_dict: Dict[str, Any]) -> Dict[str, Any
     
     try:
         # Import clean domain and application logic
-        from coral.config.loader import create_config_from_dict
-        from coral.application.evolution_engine import EvolutionEngine
-        from coral.application.experiment_orchestrator import ExperimentOrchestrator
-        from coral.domain.experiment import ExperimentConfig, create_experiment_config, create_initial_population, create_experiment_result
+        from core.config.loader import create_config_from_dict
+        from core.application.evolution_engine import EvolutionEngine
+        from core.application.experiment_orchestrator import ExperimentOrchestrator
+        from core.domain.experiment import ExperimentConfig, create_experiment_config, create_initial_population, create_experiment_result
         from plugins.quixbugs_codellama.plugin import QuixBugsCodeLlamaRealPlugin
         from infra.modal_executor import ModalExecutor
         
@@ -189,7 +189,7 @@ def evaluate_genome_modal(genome_data: Dict[str, Any], config: Dict[str, Any]) -
     try:
         # Import plugin and domain components
         from plugins.quixbugs_codellama.plugin import QuixBugsCodeLlamaRealPlugin
-        from coral.domain.genome import Genome, CASeed, LoRAConfig
+        from core.domain.genome import Genome, CASeed, LoRAConfig
         import numpy as np
         
         # Reconstruct genome from serialized data manually
@@ -216,7 +216,7 @@ def evaluate_genome_modal(genome_data: Dict[str, Any], config: Dict[str, Any]) -
             ca_features = None
             ca_features_data = genome_data.get('ca_features')
             if ca_features_data is not None:
-                from coral.domain.feature_extraction import CAFeatures
+                from core.domain.feature_extraction import CAFeatures
                 ca_features = CAFeatures(
                     complexity=ca_features_data.get('complexity', 0.5),
                     intensity=ca_features_data.get('intensity', 0.5),
@@ -304,7 +304,7 @@ def evaluate_genome_modal(genome_data: Dict[str, Any], config: Dict[str, Any]) -
                 print(f"✅ Cache coordination verified: adapter exists at expected path")
             
         except Exception as genome_error:
-            raise RuntimeError(f"FAIL-FAST: Failed to reconstruct genome from data: {genome_error}")
+            raise RuntimeError(f"  Failed to reconstruct genome from data: {genome_error}")
         
         # Create plugin with full config
         plugin = QuixBugsCodeLlamaRealPlugin(config)
@@ -318,7 +318,7 @@ def evaluate_genome_modal(genome_data: Dict[str, Any], config: Dict[str, Any]) -
             # Create a mock genome with the adapter path already set
             from pathlib import Path
             if not Path(adapter_path).exists():
-                raise RuntimeError(f"FAIL-FAST: Pre-trained adapter not found: {adapter_path}")
+                raise RuntimeError(f"  Pre-trained adapter not found: {adapter_path}")
             
             # Override the plugin's model setup to use the pre-trained adapter
             # We'll need to create a model that points to the existing adapter
@@ -395,16 +395,16 @@ def evaluate_genome_modal(genome_data: Dict[str, Any], config: Dict[str, Any]) -
 
 
 def load_real_test_cases_modal(problem_name: str, dataset_path: str) -> str:
-    """Load real test cases from QuixBugs dataset - FAIL-FAST."""
+    """Load real test cases from QuixBugs dataset."""
     from pathlib import Path
     
     # Use the dataset_path parameter (which comes from config)
     dataset_root = Path(dataset_path)
     
-    # Fail fast if path doesn't exist - don't try to auto-setup
+    # Check if path exists
     if not dataset_root.exists():
         raise RuntimeError(
-            f"FAIL-FAST: Dataset path does not exist: '{dataset_path}'. "
+            f"  Dataset path does not exist: '{dataset_path}'. "
             f"Dataset should be pre-cached at this location. "
             f"Check your config paths.modal.dataset setting."
         )
@@ -452,16 +452,16 @@ def load_real_test_cases_modal(problem_name: str, dataset_path: str) -> str:
         except Exception as e:
             print(f"   ❌ Could not list directory contents: {e}")
     
-    # FAIL-FAST: No test case generation fallbacks
+    #   No test case generation fallbacks
     raise RuntimeError(
-        f"FAIL-FAST: No real QuixBugs test cases found for '{problem_name}' in dataset '{dataset_root}'. "
+        f"  No real QuixBugs test cases found for '{problem_name}' in dataset '{dataset_root}'. "
         f"Searched {len(possible_locations)} locations. "
         f"Cannot proceed without real test cases - terminating to avoid GPU waste."
     )
 
 
 def debug_modal_volume_structure(dataset_path: str):
-    """Debug function to inspect the actual modal volume structure - FAIL-FAST."""
+    """Debug function to inspect the actual modal volume structure."""
     from pathlib import Path
     import os
     
@@ -469,7 +469,7 @@ def debug_modal_volume_structure(dataset_path: str):
     
     dataset_root = Path(dataset_path)
     if not dataset_root.exists():
-        raise RuntimeError(f"FAIL-FAST: Dataset path does not exist: '{dataset_path}'")
+        raise RuntimeError(f"  Dataset path does not exist: '{dataset_path}'")
     
     # Check dataset contents
     if dataset_root.is_dir():
@@ -505,21 +505,21 @@ def _extract_best_scores_from_results(results) -> dict:
     Extract REAL multi-objective scores from evolution results.
     
     CRITICAL: This must return actual scores for valid benchmarking.
-    FAIL-FAST if real scores are not available.
+    Requires real scores for benchmarking.
     """
     try:
         if not results.final_population or not results.final_population.genomes:
-            raise RuntimeError("FAIL-FAST: No final population available - cannot extract real scores for benchmarking")
+            raise RuntimeError("  No final population available - cannot extract real scores for benchmarking")
         
         # Find best genome from final population
         best_genome = max(results.final_population.genomes, key=lambda g: g.fitness or 0.0)
         
         if not best_genome:
-            raise RuntimeError("FAIL-FAST: No best genome found in final population")
+            raise RuntimeError("  No best genome found in final population")
         
         if not hasattr(best_genome, 'multi_scores') or not best_genome.multi_scores:
             raise RuntimeError(
-                f"FAIL-FAST: Best genome {best_genome.id} missing multi_scores. "
+                f"  Best genome {best_genome.id} missing multi_scores. "
                 f"Cannot run benchmarks without real multi-objective scores. "
                 f"Evolution system must provide actual scores, not approximations."
             )
@@ -533,7 +533,7 @@ def _extract_best_scores_from_results(results) -> dict:
         
         if missing_scores:
             raise RuntimeError(
-                f"FAIL-FAST: Missing required score components: {missing_scores}. "
+                f"  Missing required score components: {missing_scores}. "
                 f"Available scores: {list(best_scores.keys())}. "
                 f"Cannot run valid benchmarks with incomplete scores."
             )
@@ -544,4 +544,4 @@ def _extract_best_scores_from_results(results) -> dict:
     except Exception as e:
         print(f"❌ CRITICAL: Cannot extract real best_scores: {e}")
         print(f"🚫 Benchmarking requires REAL scores, not defaults or approximations")
-        raise RuntimeError(f"FAIL-FAST: Real score extraction failed: {e}") 
+        raise RuntimeError(f"  Real score extraction failed: {e}") 
