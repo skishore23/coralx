@@ -299,8 +299,8 @@ class GeneticOperationsService(LoggingMixin):
             generation: Generation number to process
         """
         try:
-            self.genetic_tracker.save_generation_data(generation)
-            self.genetic_tracker.analyze_genetic_patterns(generation)
+            self.genetic_tracker.save_tracking_data(generation)
+            self.genetic_tracker.detect_genetic_patterns(generation)
             
             self.logger.info(f"Genetic tracking processed for generation {generation}")
             

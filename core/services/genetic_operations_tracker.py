@@ -428,8 +428,8 @@ class GeneticOperationsTracker:
     def _extract_ca_features(self, genome: Genome) -> Dict[str, float]:
         """Extract CA features from a genome."""
         try:
-            from .ca import evolve
-            from .feature_extraction import extract_features
+            from ..domain.ca import evolve
+            from ..domain.feature_extraction import extract_features
             
             history = evolve(genome.seed)
             features = extract_features(history)

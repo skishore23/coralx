@@ -62,9 +62,8 @@ evaluation:
   test_samples: 10
 evo:
   alpha_candidates:
-  - 8
-  - 16
   - 32
+  - 64
   ca:
     grid_size:
     - 4
@@ -77,13 +76,11 @@ evo:
     - 5
     - 15
   dropout_candidates:
-  - 0.05
   - 0.1
-  - 0.15
+  - 0.2
   rank_candidates:
-  - 4
-  - 8
   - 16
+  - 32
   target_modules:
   - q_proj
   - v_proj
@@ -95,7 +92,7 @@ execution:
   population_size: 10
   run_held_out_benchmark: false
   selection_mode: tournament
-  survival_rate: 0.5
+  survival_rate: 0.6
 experiment:
   dataset:
     dataset_path: ./datasets/fake_news
@@ -127,11 +124,11 @@ paths:
 seed: 42
 threshold:
   base_thresholds:
-    bugfix: 0.3
-    runtime: 0.3
-    security: 0.4
-    style: 0.3
-    syntax: 0.2
+    bugfix: 0.1
+    runtime: 0.1
+    security: 0.1
+    style: 0.1
+    syntax: 0.1
   max_thresholds:
     bugfix: 0.8
     runtime: 0.7
@@ -141,14 +138,18 @@ threshold:
   schedule: sigmoid
 training:
   adam_epsilon: 1e-8
-  batch_size: 2
-  epochs: 1
+  batch_size: 8
+  epochs: 2
   gradient_accumulation_steps: 2
-  learning_rate: 1e-4
+  learning_rate: 3e-5
   logging_steps: 5
-  max_grad_norm: 1.0
-  max_steps: 20
-  save_steps: 20
+  max_grad_norm: 2.0
+  max_steps: 35
+  save_steps: 18
   save_strategy: steps
-  warmup_steps: 2
+  warmup_steps: 5
   weight_decay: 0.01
+  lr_scheduler_type: "cosine"
+  lr_scheduler_kwargs:
+    num_training_steps: 35
+    num_warmup_steps: 5
