@@ -1,4 +1,4 @@
-# CORAL-X: Evolutionary LoRA Optimization [Experimental, POC]
+# CORAL-X: Evolutionary LoRA Optimization
 
 CORAL-X evolves LoRA configs with Celluar Automata-seeded priors, a heavy/light gene split, and NSGA-II multi-objective selection (accuracy, robustness, efficiency, safety).
 
