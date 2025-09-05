@@ -29,11 +29,11 @@ def evolve(seed: CASeed, genome_id: str = None) -> CAStateHistory:
     """Pure arrow: Seed ──▶ History."""
     state = seed.grid.copy()
     hist = [state.copy()]
-    
+
     for _ in range(seed.steps):
         state = next_step(state, seed.rule)
         hist.append(state.copy())
-    
+
     return CAStateHistory(hist)
 
 
@@ -41,14 +41,14 @@ def next_step(grid: NDArray[np.int_], rule: int) -> NDArray[np.int_]:
     """Apply rule to whole grid without side‑effects."""
     height, width = grid.shape
     new_grid = np.zeros_like(grid)
-    
+
     # Apply elementary CA rule with Moore neighborhood
     for i in range(height):
         for j in range(width):
             # Calculate neighbor configuration with periodic boundary conditions
             neighbor_config = 0
             bit_pos = 0
-            
+
             # Moore neighborhood: 8 neighbors + center
             for di in [-1, 0, 1]:
                 for dj in [-1, 0, 1]:
@@ -56,10 +56,10 @@ def next_step(grid: NDArray[np.int_], rule: int) -> NDArray[np.int_]:
                     if grid[ni, nj] == 1:
                         neighbor_config |= (1 << bit_pos)
                     bit_pos += 1
-            
+
             # Apply rule based on neighbor configuration
             new_grid[i, j] = _apply_rule_fixed(neighbor_config, rule)
-    
+
     return new_grid
 
 
@@ -73,15 +73,15 @@ def _apply_rule_fixed(neighbor_config: int, rule: int) -> int:
     # Count live neighbors (exclude center cell)
     live_neighbors = bin(neighbor_config).count('1')
     center_alive = (neighbor_config >> 4) & 1
-    
+
     # Use rule number as bit pattern for elementary CA
     # Rule number encodes all possible neighborhood states
     # This ensures different rules produce different behaviors
-    
+
     # Create configuration index from neighborhood
     # Combine center state and neighbor count for rule lookup
     config_index = (center_alive << 3) | min(live_neighbors, 7)
-    
+
     # Apply rule by checking corresponding bit
     # Each rule number is treated as 8-bit pattern
     return (rule >> config_index) & 1

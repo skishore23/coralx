@@ -1,1 +1,1 @@
-# QuixBugs CodeLlama plugin 
+# QuixBugs CodeLlama plugin

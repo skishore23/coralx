@@ -22,13 +22,13 @@ class MultiObjectiveScores:
     security: float
     runtime: float
     syntax: float  # NEW: Syntax correctness score
-    
+
     def overall_fitness(self, weights: Optional[Dict[str, float]] = None) -> float:
         """Calculate overall fitness as weighted average."""
         # Use provided weights or default CORAL-X priorities
         if weights is None:
             weights = {'bugfix': 0.3, 'style': 0.15, 'security': 0.25, 'runtime': 0.1, 'syntax': 0.2}
-        
+
         return (
             self.bugfix * weights.get('bugfix', 0.3) +
             self.style * weights.get('style', 0.15) +
@@ -36,7 +36,7 @@ class MultiObjectiveScores:
             self.runtime * weights.get('runtime', 0.1) +
             self.syntax * weights.get('syntax', 0.2)
         )
-    
+
     def to_dict(self) -> Dict[str, float]:
         """Convert to dictionary for easier iteration."""
         return {
@@ -59,7 +59,7 @@ class Genome:
     multi_scores: Optional[MultiObjectiveScores] = None
     metadata: Optional[Dict[str, Any]] = None
     run_id: Optional[str] = None  # Experiment-specific identifier
-    
+
     def with_fitness(self, fitness: float) -> 'Genome':
         """Return new genome with updated fitness score."""
         return Genome(
@@ -72,7 +72,7 @@ class Genome:
             metadata=self.metadata,
             run_id=self.run_id
         )
-    
+
     def with_multi_scores(self, scores: MultiObjectiveScores) -> 'Genome':
         """Return new genome with multi-objective scores."""
         # Update overall fitness based on multi-objective scores
@@ -87,7 +87,7 @@ class Genome:
             metadata=self.metadata,
             run_id=self.run_id
         )
-    
+
     def with_metadata(self, metadata: Dict[str, Any]) -> 'Genome':
         """Return new genome with updated metadata."""
         return Genome(
@@ -100,7 +100,7 @@ class Genome:
             metadata=metadata,
             run_id=self.run_id
         )
-    
+
     def with_ca_features(self, ca_features: 'CAFeatures') -> 'Genome':
         """Return new genome with CA features for consistency."""
         return Genome(
@@ -113,15 +113,15 @@ class Genome:
             metadata=self.metadata,
             run_id=self.run_id
         )
-    
+
     def is_evaluated(self) -> bool:
         """Check if genome has been evaluated."""
         return self.fitness is not None
-    
+
     def has_multi_scores(self) -> bool:
         """Check if genome has multi-objective scores."""
         return self.multi_scores is not None
-    
+
     def get_heavy_genes_key(self) -> tuple:
         """Extract heavy genes that require adapter training."""
         return (
@@ -132,7 +132,7 @@ class Genome:
             self.lora_cfg.adapter_type,  # 🔥 Include adapter_type in heavy genes
             self.run_id                  # 🔥 Include run_id for experiment isolation
         )
-    
+
     def __lt__(self, other: 'Genome') -> bool:
         """Support sorting by fitness (higher is better)."""
         if self.fitness is None and other.fitness is None:
@@ -141,4 +141,4 @@ class Genome:
             return True
         if other.fitness is None:
             return False
-        return self.fitness < other.fitness 
+        return self.fitness < other.fitness

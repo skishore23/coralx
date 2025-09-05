@@ -10,14 +10,14 @@ class CoralError(Exception):
     exceptions should inherit from. It provides structured error information
     and supports additional context.
     """
-    
-    def __init__(self, message: str, context: Optional[Dict[str, Any]] = None, 
+
+    def __init__(self, message: str, context: Optional[Dict[str, Any]] = None,
                  cause: Optional[Exception] = None):
         super().__init__(message)
         self.message = message
         self.context = context or {}
         self.cause = cause
-    
+
     def __str__(self) -> str:
         result = self.message
         if self.context:

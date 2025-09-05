@@ -88,7 +88,7 @@ execution:
   crossover_rate: 0.7
   current_generation: 0
   generations: 10
-  output_dir: ./runs/current
+  output_dir: ./artifacts/tinyllama_local
   population_size: 10
   run_held_out_benchmark: false
   selection_mode: tournament

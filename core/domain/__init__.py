@@ -1,1 +1,1 @@
-# Domain layer - pure functional components 
+# Domain layer - pure functional components

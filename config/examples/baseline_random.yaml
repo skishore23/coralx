@@ -11,7 +11,7 @@ cache:
 execution:
   generations: 1
   population_size: 8          # Sample 8 random configurations
-  output_dir: ./runs/current
+  output_dir: ./artifacts/baseline_random
   selection_mode: tournament  # Use tournament but with high survival rate
   survival_rate: 1.0          # Keep all for comparison
   crossover_rate: 0.0         # No crossover - pure random

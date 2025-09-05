@@ -13,7 +13,7 @@ ALL components (training, evaluation, plugins) MUST use these constants.
 QUIXBUGS_TRAINING_PROBLEMS = frozenset({
     'gcd', 'get_factors', 'is_valid_parenthesization', 'levenshtein',
     'longest_common_subsequence', 'max_sublist_sum', 'pascal', 'reverse_linked_list',
-    'hanoi', 'mergesort', 'bitcount', 'bucketsort', 'find_first_in_sorted', 
+    'hanoi', 'mergesort', 'bitcount', 'bucketsort', 'find_first_in_sorted',
     'find_in_sorted', 'flatten', 'knapsack', 'kth', 'lis', 'powerset',
     'quicksort', 'rpn_eval', 'shunting_yard', 'sqrt', 'subsequences'
 })
@@ -74,11 +74,11 @@ validate_no_overlap()
 # Export for type hints
 __all__ = [
     'QUIXBUGS_TRAINING_PROBLEMS',
-    'QUIXBUGS_CLEAN_TEST_PROBLEMS', 
+    'QUIXBUGS_CLEAN_TEST_PROBLEMS',
     'EASY_PROBLEMS',
-    'MEDIUM_PROBLEMS', 
+    'MEDIUM_PROBLEMS',
     'HARD_PROBLEMS',
     'is_training_problem',
     'is_clean_test_problem',
     'validate_no_overlap'
-] 
+]

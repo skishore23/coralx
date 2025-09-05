@@ -11,7 +11,7 @@ cd coralx
 pip install -r requirements.txt
 
 # Verify installation
-python -m coral.cli.main version
+python core/cli/main.py --help
 ```
 
 ## Your First Evolution Run
@@ -29,7 +29,7 @@ ls config/
 
 ```bash
 # Start evolution (will download model if needed)
-python -m coral.cli.main run --config config/tinyllama_local.yaml
+python core/cli/main.py run --config config/tinyllama_local.yaml
 
 # Monitor progress in another terminal
 tail -f runs/current/evolution_progress.json

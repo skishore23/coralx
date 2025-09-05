@@ -1,0 +1,70 @@
+# Smoke test configuration for CORAL-X
+# This is a minimal configuration for testing the CLI
+
+execution:
+  generations: 1
+  population_size: 4
+  output_dir: "./artifacts/smoke"
+  selection_mode: "pareto"
+  survival_rate: 0.5
+  crossover_rate: 0.7
+
+evo:
+  rank_candidates: [4, 8]
+  alpha_candidates: [8, 16]
+  dropout_candidates: [0.05, 0.1]
+  target_modules: ["q_proj", "v_proj"]
+
+experiment:
+  target: "fakenews_tinyllama"
+  name: "smoke_test"
+  dataset:
+    path: "./datasets"
+    max_samples: 10
+    datasets: ["fake_news"]
+  model:
+    name: "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+    max_seq_length: 512
+
+evaluation:
+  test_samples: 5
+  fitness_weights:
+    bugfix: 0.3
+    style: 0.15
+    security: 0.25
+    runtime: 0.1
+    syntax: 0.2
+
+infra:
+  executor: "local"
+
+cache:
+  artifacts_dir: "./cache/smoke"
+  base_checkpoint: "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+  metadata: true
+  cleanup_threshold: 10
+
+threshold:
+  base_thresholds:
+    bugfix: 0.1
+    style: 0.1
+    security: 0.1
+    runtime: 0.1
+    syntax: 0.1
+  max_thresholds:
+    bugfix: 0.8
+    style: 0.8
+    security: 0.8
+    runtime: 0.8
+    syntax: 0.8
+  schedule: "sigmoid"
+
+training:
+  batch_size: 2
+  epochs: 1
+  learning_rate: 2e-4
+  warmup_steps: 10
+  logging_steps: 5
+  save_steps: 10
+
+seed: 42

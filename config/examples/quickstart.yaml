@@ -11,7 +11,7 @@ cache:
 execution:
   generations: 1
   population_size: 4
-  output_dir: ./runs/current
+  output_dir: ./artifacts/quickstart
   selection_mode: tournament
   survival_rate: 0.5
   crossover_rate: 0.7

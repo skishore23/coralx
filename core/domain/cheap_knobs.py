@@ -33,7 +33,7 @@ class CheapKnobs:
     do_sample: bool           # True for sampling, False for greedy
 
 
-def map_ca_features_to_cheap_knobs(features: CAFeatures, 
+def map_ca_features_to_cheap_knobs(features: CAFeatures,
                                   base_config: Dict[str, Any] = None) -> CheapKnobs:
     """
     Map CA features to runtime generation parameters.
@@ -53,41 +53,41 @@ def map_ca_features_to_cheap_knobs(features: CAFeatures,
     #   No default fallbacks - config must be provided
     if base_config is None:
         raise ValueError("  base_config required for cheap knobs mapping - no defaults provided")
-    
-    #   All parameter ranges must be specified  
+
+    #   All parameter ranges must be specified
     required_ranges = ['temperature_range', 'top_p_range', 'top_k_range', 'repetition_penalty_range', 'max_tokens_range']
     for range_key in required_ranges:
         if range_key not in base_config:
             raise ValueError(f"  {range_key} missing from cheap knobs config - two-loop architecture requires explicit ranges")
-    
+
     temp_range = base_config['temperature_range']
-    top_p_range = base_config['top_p_range'] 
+    top_p_range = base_config['top_p_range']
     top_k_range = base_config['top_k_range']
     rep_penalty_range = base_config['repetition_penalty_range']
     token_range = base_config['max_tokens_range']
-    
+
     # Map complexity to temperature (more complex CA → higher temperature)
     # Complex patterns suggest need for creative/diverse generation
     temperature = _map_complexity_to_temperature(features.complexity, temp_range)
-    
-    # Map intensity to top_p (more active CA → higher top_p)  
+
+    # Map intensity to top_p (more active CA → higher top_p)
     # Active patterns suggest broader token sampling
     top_p = _map_intensity_to_top_p(features.intensity, top_p_range)
-    
+
     # Map periodicity to repetition penalty (more periodic → higher penalty)
     # Periodic patterns suggest need to avoid repetitive generation
     repetition_penalty = _map_periodicity_to_repetition_penalty(features.periodicity, rep_penalty_range)
-    
+
     # Map convergence to top_k (more convergent → lower top_k)
     # Convergent patterns suggest focused/precise generation
     top_k = _map_convergence_to_top_k(features.convergence, top_k_range)
-    
+
     # Map combined features to token limit
     max_new_tokens = _map_combined_to_token_limit(features, token_range)
-    
+
     # Determine sampling strategy based on overall feature profile
     do_sample = _should_use_sampling(features)
-    
+
     return CheapKnobs(
         temperature=temperature,
         top_p=top_p,
@@ -108,13 +108,13 @@ def _map_complexity_to_temperature(complexity: float, temp_range: tuple) -> floa
     - High complexity (0.7-1.0) → High temperature (creative generation)
     """
     min_temp, max_temp = temp_range
-    
+
     # Apply non-linear mapping to emphasize high complexity
     enhanced_complexity = complexity ** 0.8
-    
+
     # Map to temperature range with minimum threshold
     temperature = min_temp + enhanced_complexity * (max_temp - min_temp)
-    
+
     return round(temperature, 2)
 
 
@@ -128,13 +128,13 @@ def _map_intensity_to_top_p(intensity: float, top_p_range: tuple) -> float:
     - High intensity (0.7-1.0) → Higher top_p (broad sampling)
     """
     min_top_p, max_top_p = top_p_range
-    
+
     # Apply square root to spread out low intensity values
     enhanced_intensity = np.sqrt(intensity)
-    
+
     # Map to top_p range
     top_p = min_top_p + enhanced_intensity * (max_top_p - min_top_p)
-    
+
     return round(top_p, 2)
 
 
@@ -148,13 +148,13 @@ def _map_periodicity_to_repetition_penalty(periodicity: float, penalty_range: tu
     - High periodicity (0.7-1.0) → High penalty (strong anti-repetition)
     """
     min_penalty, max_penalty = penalty_range
-    
+
     # Apply power transformation to emphasize high periodicity
     enhanced_periodicity = periodicity ** 1.2
-    
+
     # Map to penalty range
     penalty = min_penalty + enhanced_periodicity * (max_penalty - min_penalty)
-    
+
     return round(penalty, 2)
 
 
@@ -168,16 +168,16 @@ def _map_convergence_to_top_k(convergence: float, top_k_range: tuple) -> int:
     - High convergence (0.7-1.0) → Low top_k (focused sampling)
     """
     min_top_k, max_top_k = top_k_range
-    
+
     # Invert convergence (high convergence → low top_k)
     inverted_convergence = 1.0 - convergence
-    
+
     # Apply square root for smoother distribution
     enhanced_convergence = np.sqrt(inverted_convergence)
-    
+
     # Map to top_k range
     top_k = min_top_k + enhanced_convergence * (max_top_k - min_top_k)
-    
+
     return int(round(top_k))
 
 
@@ -188,7 +188,7 @@ def _map_combined_to_token_limit(features: CAFeatures, token_range: tuple) -> in
     Logic: Complex, active patterns suggest need for longer generations
     """
     min_tokens, max_tokens = token_range
-    
+
     # Combine features that suggest need for longer generation
     generation_need = (
         0.4 * features.complexity +      # Complex problems need more tokens
@@ -196,13 +196,13 @@ def _map_combined_to_token_limit(features: CAFeatures, token_range: tuple) -> in
         0.2 * (1 - features.convergence) + # Non-convergent needs more attempts
         0.1 * (1 - features.periodicity)   # Non-periodic needs more diversity
     )
-    
+
     # Apply non-linear scaling
     enhanced_need = generation_need ** 0.9
-    
+
     # Map to token range
     max_tokens_mapped = min_tokens + enhanced_need * (max_tokens - min_tokens)
-    
+
     return int(round(max_tokens_mapped))
 
 
@@ -215,11 +215,11 @@ def _should_use_sampling(features: CAFeatures) -> bool:
     # Calculate "creativity score" from features
     creativity_score = (
         0.3 * features.complexity +      # Complex patterns need creativity
-        0.3 * features.intensity +       # Active patterns need exploration  
+        0.3 * features.intensity +       # Active patterns need exploration
         0.2 * (1 - features.convergence) + # Non-convergent needs diversity
         0.2 * (1 - features.periodicity)   # Non-periodic needs variation
     )
-    
+
     # Use sampling if creativity score > 0.4 (moderate threshold)
     return creativity_score > 0.4
 
@@ -253,13 +253,13 @@ def analyze_cheap_knobs_diversity(knobs_list: list) -> Dict[str, Any]:
     """
     if not knobs_list:
         return {'error': 'No knobs provided'}
-    
+
     temperatures = [k.temperature for k in knobs_list]
     top_ps = [k.top_p for k in knobs_list]
     top_ks = [k.top_k for k in knobs_list]
     penalties = [k.repetition_penalty for k in knobs_list]
     tokens = [k.max_new_tokens for k in knobs_list]
-    
+
     return {
         'count': len(knobs_list),
         'temperature': {
@@ -278,4 +278,4 @@ def analyze_cheap_knobs_diversity(knobs_list: list) -> Dict[str, Any]:
             'std': np.std(top_ks)
         },
         'sampling_ratio': sum(1 for k in knobs_list if k.do_sample) / len(knobs_list)
-    } 
+    }

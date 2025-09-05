@@ -1,7 +1,6 @@
 """Tests for core domain modules."""
 
 import pytest
-from pathlib import Path
 
 def test_adapter_config_import():
     """Test adapter config module imports."""
@@ -36,7 +35,7 @@ def test_genome_import():
 def test_adapter_parameters_validation():
     """Test adapter parameter validation."""
     from core.domain.adapter_config import AdapterParameters
-    
+
     # Valid parameters
     params = AdapterParameters(
         rank=8,
@@ -47,7 +46,7 @@ def test_adapter_parameters_validation():
     )
     assert params.rank == 8
     assert params.alpha == 16.0
-    
+
     # Invalid rank
     with pytest.raises(ValueError, match="Invalid rank"):
         AdapterParameters(
@@ -61,7 +60,7 @@ def test_adapter_parameters_validation():
 def test_multi_objective_scores():
     """Test multi-objective scores creation."""
     from core.domain.genome import MultiObjectiveScores
-    
+
     scores = MultiObjectiveScores(
         bugfix=0.8,
         style=0.7,
@@ -69,10 +68,10 @@ def test_multi_objective_scores():
         runtime=0.6,
         syntax=0.85
     )
-    
+
     assert scores.bugfix == 0.8
     assert scores.overall_fitness() > 0.0
-    
+
     scores_dict = scores.to_dict()
     assert "bugfix" in scores_dict
     assert scores_dict["bugfix"] == 0.8

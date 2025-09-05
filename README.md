@@ -14,7 +14,7 @@ git clone <repo>
 cd coralx
 pip install -r requirements.txt
 
-python -m core.cli.main run --config config/examples/quickstart.yaml
+python core/cli/main.py run --config config/examples/quickstart.yaml
 
 # Expected: completes in ~10–20 min on a single GPU (or slower on CPU),
 # writes adapters to ./cache and a summary to ./runs/<run_id>/summary.json
@@ -24,14 +24,14 @@ python -m core.cli.main run --config config/examples/quickstart.yaml
 
 ```bash
 # Random search baseline
-python -m core.cli.main run --config config/examples/baseline_random.yaml
+python core/cli/main.py run --config config/examples/baseline_random.yaml
 
 # Grid search baseline  
-python -m core.cli.main run --config config/examples/baseline_grid.yaml
+python core/cli/main.py run --config config/examples/baseline_grid.yaml
 
 # Full experiments  
-python -m core.cli.main run --config config/tinyllama_local.yaml    # Fake news (local)
-python -m core.cli.main run --config config/codellama_modal.yaml    # Code bugs (Modal)
+python core/cli/main.py run --config config/tinyllama_local.yaml    # Fake news (local)
+python core/cli/main.py run --config config/codellama_modal.yaml    # Code bugs (Modal)
 ```
 
 ## Architecture Overview
@@ -220,7 +220,7 @@ Thanks to category theory foundations:
 
 ```bash
 # Same config + seed = identical evolution on any machine
-python -m core.cli.main run --config config/examples/quickstart.yaml
+python core/cli/main.py run --config config/examples/quickstart.yaml
 # Will produce identical adapter_<hash> files and fitness scores
 
 # Different researchers get identical results  

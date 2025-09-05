@@ -11,7 +11,7 @@ cache:
 execution:
   generations: 1
   population_size: 12         # 3x2x2 = 12 combinations
-  output_dir: ./runs/current
+  output_dir: ./artifacts/baseline_grid
   selection_mode: tournament  # Use tournament selection
   survival_rate: 1.0          # Keep all for comparison
   crossover_rate: 0.0         # No crossover - pure grid search

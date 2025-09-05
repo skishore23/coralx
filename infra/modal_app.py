@@ -21,7 +21,7 @@ coral_gpu_image = (
     modal.Image.debian_slim(python_version="3.10")
     .pip_install([
         "torch>=2.0.0",
-        "transformers>=4.30.0", 
+        "transformers>=4.30.0",
         "peft>=0.4.0",
         "datasets>=2.12.0",
         "accelerate>=0.20.0",
@@ -57,13 +57,13 @@ coral_volume = modal.Volume.from_name("coral-x-clean-cache", create_if_missing=T
 # These MUST be defined BEFORE the worker functions that reference them
 training_queue = modal.Queue.from_name("coral-training", create_if_missing=True)
 test_queue = modal.Queue.from_name("coral-test", create_if_missing=True)
-generation_queue = modal.Queue.from_name("coral-generation", create_if_missing=True) 
+generation_queue = modal.Queue.from_name("coral-generation", create_if_missing=True)
 results_queue = modal.Queue.from_name("coral-results", create_if_missing=True)
 cache_index = modal.Dict.from_name("coral-cache-index", create_if_missing=True)
 
 print("🧮 Global queue category objects initialized")
-print(f"   Queues: coral-training, coral-test, coral-generation, coral-results")
-print(f"   Cache: coral-cache-index")
+print("   Queues: coral-training, coral-test, coral-generation, coral-results")
+print("   Cache: coral-cache-index")
 
 # ========================================
 # 🏗️ AUTO-SCALING WORKERS
@@ -84,24 +84,23 @@ def training_worker():
     """
     """Natural transformation: Local → Queue → Result via global queue category."""
     import sys
-    from pathlib import Path
     import time
-    
+
     # 🧮 CATEGORY THEORY: Reference global queue objects (natural transformation)
     global training_queue, results_queue, cache_index
-    
+
     # 🔧 Environment setup
     print("🏗️ Training worker started (category theory compliant)")
-    
+
     coralx_path = Path("/root/coralx")
     if not coralx_path.exists():
         print(f"❌ CoralX codebase not found: {coralx_path}")
         return
-    
+
     sys.path.insert(0, str(coralx_path))
     print(f"🐍 Added to Python path: {coralx_path}")
     print("🏗️ Training worker ready - processing from global training queue...")
-    
+
     # 🧮 CATEGORY THEORY: Continuous natural transformation η: Queue[Job] → Queue[Result]
     while True:
         job = None
@@ -110,12 +109,12 @@ def training_worker():
             job = training_queue.get(timeout=60)  # Longer timeout for stability
             if job is None:
                 continue  # Keep worker alive for auto-scaling
-            
+
             print(f"🚀 Processing training job: {job['job_id']}")
-            
+
             # F(process_training_job): Pure functorial mapping
             result = process_training_job(job, idempotency_cache=cache_index)
-            
+
             # μ: Put result in global results queue (natural transformation)
             result_data = {
                 'job_id': job['job_id'],
@@ -124,14 +123,14 @@ def training_worker():
                 'timestamp': time.time()
             }
             results_queue.put(result_data)
-            
+
             print(f"✅ Training completed: {job['job_id']}")
-            
+
         except Exception as e:
             # Handle errors while preserving categorical structure
             error_str = str(e).lower()
             exception_type = type(e).__name__.lower()
-            
+
             # Check for cancellation/shutdown conditions (  Exit gracefully on shutdown)
             is_cancellation = (
                 exception_type in ['clientclosed', 'cancelled', 'asynciocancellederror'] or
@@ -139,18 +138,18 @@ def training_worker():
                 'cancell' in error_str or
                 'shutdown' in error_str
             )
-            
+
             if is_cancellation:
                 print(f"🛑 Training worker graceful shutdown: {type(e).__name__}")
                 break  # Exit worker loop gracefully
-            
+
             # Check for normal timeout conditions (queue empty, timeouts, etc.)
             is_timeout = (
                 any(timeout_word in error_str for timeout_word in ['timeout', 'empty', 'no message']) or
                 exception_type in ['empty', 'queueempty'] or
                 'queue.empty' in str(e).lower()
             )
-            
+
             if is_timeout:
                 # Normal timeout - worker stays alive for auto-scaling
                 continue
@@ -189,16 +188,15 @@ def training_worker():
 def generation_worker(jobs: list):
     """Auto-scaling generation worker - batched for efficiency."""
     import sys
-    from pathlib import Path
-    
+
     # Add coralx to Python path
     coralx_path = Path("/root/coralx")
     if not coralx_path.exists():
         return [{"error": "CoralX codebase not found"} for _ in jobs]
     sys.path.insert(0, str(coralx_path))
-    
+
     print(f"🧪 Processing {len(jobs)} generation jobs in batch")
-    
+
     results = []
     for job in jobs:
         try:
@@ -214,7 +212,7 @@ def generation_worker(jobs: list):
                 'error': str(e),
                 'timestamp': time.time()
             })
-    
+
     return results
 
 @app.function(
@@ -232,24 +230,23 @@ def test_worker():
     Natural transformation: η: Local → Queue → Result via global queue category.
     """
     import sys
-    from pathlib import Path
     import time
-    
+
     # 🧮 CATEGORY THEORY: Reference global queue objects (natural transformation)
     global test_queue, results_queue, cache_index
-    
+
     # 🔧 Environment setup
     print("🧪 Test worker started (category theory compliant)")
-    
+
     coralx_path = Path("/root/coralx")
     if not coralx_path.exists():
         print(f"❌ CoralX codebase not found: {coralx_path}")
         return
-    
+
     sys.path.insert(0, str(coralx_path))
     print(f"🐍 Added to Python path: {coralx_path}")
     print("🧪 Test worker ready - processing from global test queue...")
-    
+
     # 🧮 CATEGORY THEORY: Continuous natural transformation η: Queue[Job] → Queue[Result]
     while True:
         job = None
@@ -258,16 +255,16 @@ def test_worker():
             job = test_queue.get(timeout=60)  # Longer timeout for stability
             if job is None:
                 continue  # Keep worker alive for auto-scaling
-            
+
             print(f"🧪 Processing job: {job['job_id']} (type: {job.get('job_type', 'unknown')})")
-            
+
             # F(process_job): Pure functorial mapping based on job type
             job_type = job.get('job_type', 'test')
             if job_type == 'evaluation':
                 result = process_evaluation_job(job)
             else:
                 result = process_test_job(job)
-            
+
             # μ: Put result in global results queue (natural transformation)
             result_data = {
                 'job_id': job['job_id'],
@@ -276,14 +273,14 @@ def test_worker():
                 'timestamp': time.time()
             }
             results_queue.put(result_data)
-            
+
             print(f"✅ Test completed: {job['job_id']}")
-            
+
         except Exception as e:
             # Handle errors while preserving categorical structure
             error_str = str(e).lower()
             exception_type = type(e).__name__.lower()
-            
+
             # Check for cancellation/shutdown conditions (  Exit gracefully on shutdown)
             is_cancellation = (
                 exception_type in ['clientclosed', 'cancelled', 'asynciocancellederror'] or
@@ -291,18 +288,18 @@ def test_worker():
                 'cancell' in error_str or
                 'shutdown' in error_str
             )
-            
+
             if is_cancellation:
                 print(f"🛑 Test worker graceful shutdown: {type(e).__name__}")
                 break  # Exit worker loop gracefully
-            
+
             # Check for normal timeout conditions (queue empty, timeouts, etc.)
             is_timeout = (
                 any(timeout_word in error_str for timeout_word in ['timeout', 'empty', 'no message']) or
                 exception_type in ['empty', 'queueempty'] or
                 'queue.empty' in str(e).lower()
             )
-            
+
             if is_timeout:
                 # Normal timeout - worker stays alive for auto-scaling
                 continue
@@ -343,14 +340,13 @@ def test_worker():
 )
 def check_cost_budget():
     """Check if we're within cost budget for the day."""
-    import os
-    from datetime import datetime, timedelta
-    
+    from datetime import datetime
+
     # Simple budget check - can be made more sophisticated
     budget_limit_gpu_hours = int(os.environ.get('CORAL_DAILY_GPU_BUDGET', '10'))  # Default 10 GPU hours/day
-    
+
     print(f"💰 Checking cost budget (limit: {budget_limit_gpu_hours} GPU hours/day)")
-    
+
     # For now, return a simple status - can be enhanced with actual Modal billing API
     budget_status = {
         'within_budget': True,  # TODO: Implement actual budget checking
@@ -358,7 +354,7 @@ def check_cost_budget():
         'gpu_hours_limit': budget_limit_gpu_hours,
         'timestamp': datetime.now().isoformat()
     }
-    
+
     print(f"✅ Budget check: {budget_status}")
     return budget_status
 
@@ -372,20 +368,18 @@ def check_cost_budget():
 @modal.fastapi_endpoint(method="GET")
 def check_cache_volume():
     """Check what's in the cache volume via HTTP endpoint."""
-    from pathlib import Path
-    import os
-    
+
     cache_path = Path("/cache")
     print(f"📁 Cache volume contents at: {cache_path}")
-    
+
     if not cache_path.exists():
         return {"error": "Cache path doesn't exist"}
-    
+
     def scan_directory(path, max_depth=3, current_depth=0):
         items = []
         if current_depth >= max_depth:
             return items
-            
+
         try:
             for item in sorted(path.iterdir()):
                 if item.is_file():
@@ -403,9 +397,9 @@ def check_cache_volume():
             items.append("❌ Permission denied")
         except Exception as e:
             items.append(f"❌ Error: {e}")
-            
+
         return items
-    
+
     contents = scan_directory(cache_path)
     return {
         "path": str(cache_path),
@@ -423,25 +417,24 @@ def check_cache_volume():
 )
 def setup_model_cache(model_name: str = "codellama/CodeLlama-7b-Python-hf"):
     """Pre-download and cache the model in the volume."""
-    from pathlib import Path
     import os
-    
+
     print(f"📥 Setting up model cache for: {model_name}")
-    
+
     model_cache_dir = "/cache/models"
     Path(model_cache_dir).mkdir(parents=True, exist_ok=True)
-    
+
     try:
         from transformers import AutoTokenizer, AutoModelForCausalLM
-        
-        print(f"📥 Downloading tokenizer...")
+
+        print("📥 Downloading tokenizer...")
         tokenizer = AutoTokenizer.from_pretrained(
             model_name,
             cache_dir=model_cache_dir,
             local_files_only=False  # Allow download
         )
-        
-        print(f"📥 Downloading model...")
+
+        print("📥 Downloading model...")
         model = AutoModelForCausalLM.from_pretrained(
             model_name,
             cache_dir=model_cache_dir,
@@ -449,9 +442,9 @@ def setup_model_cache(model_name: str = "codellama/CodeLlama-7b-Python-hf"):
             torch_dtype="auto",
             device_map="cpu"  # Keep on CPU for caching
         )
-        
+
         print(f"✅ Model cached successfully at: {model_cache_dir}")
-        
+
         # Check what was cached
         cached_files = []
         for root, dirs, files in os.walk(model_cache_dir):
@@ -459,14 +452,14 @@ def setup_model_cache(model_name: str = "codellama/CodeLlama-7b-Python-hf"):
                 file_path = Path(root) / file
                 size = file_path.stat().st_size
                 cached_files.append(f"{file} ({size} bytes)")
-        
+
         return {
             "success": True,
             "model_name": model_name,
             "cache_dir": model_cache_dir,
             "cached_files": cached_files
         }
-        
+
     except Exception as e:
         return {
             "success": False,
@@ -478,18 +471,17 @@ def process_training_job(job, idempotency_cache=None):
     """Process a training job with cost budget check and idempotency."""
     from core.domain.lora_training import train_codellama_lora
     import json
-    from pathlib import Path
     import time
-    
+
     job_id = job['job_id']
     heavy_genes = job['heavy_genes']
-    
+
     # 🔄 IDEMPOTENCY CHECK: Avoid duplicate processing
     if idempotency_cache and job_id in idempotency_cache:
         cached_result = idempotency_cache[job_id]
         print(f"🔄 Idempotency hit: {job_id} → {cached_result}")
         return cached_result
-    
+
     # 💰 COST CIRCUIT-BREAKER: Check budget before expensive training
     try:
         budget_status = check_cost_budget.remote()
@@ -497,33 +489,33 @@ def process_training_job(job, idempotency_cache=None):
             raise RuntimeError(f"COST-CIRCUIT-BREAKER: Daily GPU budget exceeded ({budget_status['gpu_hours_used_today']}/{budget_status['gpu_hours_limit']} hours)")
     except Exception as budget_error:
         print(f"⚠️  Budget check failed, proceeding cautiously: {budget_error}")
-    
+
     # Extract job parameters
     base_model = job['base_model']
     save_path = job['save_path']
     config = job['config']
-    
+
     print(f"🏗️ Training: {heavy_genes.to_hash()[:8]} → {save_path}")
-    
+
     # 📊 UPDATE PROGRESS: Training started
     try:
         progress_file = Path("/cache/evolution_progress.json")
         if progress_file.exists():
             with open(progress_file, 'r') as f:
                 progress = json.load(f)
-            
+
             # Update training stats
             progress['status'] = 'training'
             progress['message'] = f'Training adapter {heavy_genes.to_hash()[:8]}...'
             progress['training_stats']['current_adapter'] = heavy_genes.to_hash()[:8]
             progress['training_stats']['adapters_trained'] += 1
             progress['last_update'] = time.time()
-            
+
             with open(progress_file, 'w') as f:
                 json.dump(progress, f, indent=2)
     except Exception as e:
         print(f"⚠️  Progress update failed: {e}")
-    
+
     # Call training function directly
     result_path = train_codellama_lora(
         base_ckpt=base_model,
@@ -531,27 +523,27 @@ def process_training_job(job, idempotency_cache=None):
         save_to=save_path,
         config=config
     )
-    
+
     # 📊 UPDATE PROGRESS: Training completed
     try:
         if progress_file.exists():
             with open(progress_file, 'r') as f:
                 progress = json.load(f)
-            
+
             # Update training completion stats
             progress['training_stats']['training_rate'] = progress['training_stats']['adapters_trained'] / max(1, progress.get('population_size', 1))
             progress['last_update'] = time.time()
-            
+
             with open(progress_file, 'w') as f:
                 json.dump(progress, f, indent=2)
     except Exception as e:
         print(f"⚠️  Progress update failed: {e}")
-    
+
     # 🔄 CACHE RESULT: Store for idempotency
     if idempotency_cache:
         idempotency_cache[job_id] = result_path
         print(f"🔄 Cached result: {job_id} → {result_path}")
-    
+
     return result_path
 
 @app.function(
@@ -566,22 +558,21 @@ def process_training_job(job, idempotency_cache=None):
 def generate_code_modal(model_name: str, adapter_path: str, problem_name: str, buggy_code: str, config: dict, cheap_knobs: dict):
     """🎯 Generate code using CodeLlama with LoRA adapter and CA-derived cheap knobs."""
     import sys
-    from pathlib import Path
-    
+
     # Add coralx to Python path
     coralx_path = Path("/root/coralx")
     if not coralx_path.exists():
         raise RuntimeError("  CoralX codebase not found in Modal environment")
     sys.path.insert(0, str(coralx_path))
-    
+
     print(f"🤖 Modal generation: {problem_name} with {model_name}")
     print(f"   📁 Adapter: {adapter_path}")
     print(f"   🎛️  CA knobs: T={cheap_knobs.get('temperature', 0.7):.3f}, p={cheap_knobs.get('top_p', 0.9):.3f}")
-    
+
     # Create GenerationRequest object and delegate to existing service
     from plugins.quixbugs_codellama.codellama_generation import GenerationRequest
     from infra.modal.codellama_service import generate_with_codellama_modal
-    
+
     # Convert cheap_knobs dict to GenerationRequest parameters
     request = GenerationRequest(
         problem_name=problem_name,
@@ -595,10 +586,10 @@ def generate_code_modal(model_name: str, adapter_path: str, problem_name: str, b
         repetition_penalty=cheap_knobs.get('repetition_penalty', 1.0),
         do_sample=cheap_knobs.get('do_sample', True)
     )
-    
+
     # Call the actual generation service
     result = generate_with_codellama_modal(request)
-    
+
     # Return just the generated code string (not the full GenerationResult object)
     return result.generated_code
 
@@ -606,70 +597,69 @@ def generate_code_modal(model_name: str, adapter_path: str, problem_name: str, b
 def process_generation_job(job):
     """Process a code generation job."""
     from plugins.quixbugs_codellama.codellama_generation import generate_with_codellama
-    
+
     # Extract job parameters
     request = job['request']
     config = job['config']
-    
+
     print(f"🤖 Generating code for: {request.problem_name}")
-    
+
     # Call generation function
     result = generate_with_codellama(request, config)
-    
+
     return result.generated_code
 
 def process_evaluation_job(job):
     """Process a genome evaluation job."""
     import sys
-    from pathlib import Path
     import json
     import time
-    
+
     # Add coralx to Python path
     coralx_path = Path("/root/coralx")
     if not coralx_path.exists():
         raise RuntimeError("  CoralX codebase not found in Modal environment")
     sys.path.insert(0, str(coralx_path))
-    
+
     # Import clean Modal service for evaluation
     from infra.modal.experiment_service import evaluate_genome_modal
-    
+
     # 🔥 CRITICAL FIX: Extract adapter_path from job (was missing!)
     genome_data = job['genome_data']
     adapter_path = job['adapter_path']  # ✅ This was the missing piece!
     config = job['config']
-    
+
     print(f"🧬 Evaluating genome: {genome_data['id']}")
     print(f"📁 Using pre-trained adapter: {adapter_path}")
-    
+
     # 📊 UPDATE PROGRESS: Evaluation started
     try:
         progress_file = Path("/cache/evolution_progress.json")
         if progress_file.exists():
             with open(progress_file, 'r') as f:
                 progress = json.load(f)
-            
+
             # Update evaluation stats
             progress['status'] = 'evaluating'
             progress['message'] = f'Evaluating genome {genome_data["id"][:8]}...'
             progress['last_update'] = time.time()
-            
+
             with open(progress_file, 'w') as f:
                 json.dump(progress, f, indent=2)
     except Exception as e:
         print(f"⚠️  Progress update failed: {e}")
-    
+
     # 🔥 CRITICAL FIX: Pass adapter_path to evaluation service
     # This tells the evaluation to use the pre-trained adapter instead of training a new one
     config_with_adapter = {**config, 'adapter_path': adapter_path}
     result = evaluate_genome_modal(genome_data, config_with_adapter)
-    
+
     # 📊 UPDATE PROGRESS: Update best scores if better
     try:
         if progress_file.exists() and isinstance(result, dict):
             with open(progress_file, 'r') as f:
                 progress = json.load(f)
-            
+
             # Update best scores if this genome is better
             if 'bugfix' in result:
                 current_best = progress.get('best_scores', {})
@@ -678,39 +668,39 @@ def process_evaluation_job(job):
                         current_score = result[metric]
                         if current_score > current_best.get(metric, 0):
                             current_best[metric] = current_score
-                
+
                 progress['best_scores'] = current_best
-                
+
                 # Calculate overall fitness
                 total_fitness = sum(current_best.values()) / len(current_best)
                 if total_fitness > progress.get('best_fitness', 0):
                     progress['best_fitness'] = total_fitness
-            
+
             progress['last_update'] = time.time()
-            
+
             with open(progress_file, 'w') as f:
                 json.dump(progress, f, indent=2)
     except Exception as e:
         print(f"⚠️  Progress update failed: {e}")
-    
+
     return result
 
 def process_test_job(job):
     """Process a code testing job."""
     from adapters.quixbugs_real import QuixBugsRealAdapter
-    
+
     # Extract job parameters
     generated_code = job['generated_code']
     problem_name = job['problem_name']
     problem_data = job['problem_data']
     config = job['config']
-    
+
     print(f"🧪 Testing code for: {problem_name}")
-    
+
     # Create adapter and evaluate
     adapter = QuixBugsRealAdapter(config=config)
     result = adapter.evaluate_code(generated_code, problem_name, problem_data)
-    
+
     return result
 
 # ========================================
@@ -727,22 +717,21 @@ def process_test_job(job):
 def handle_failed_job(job, error_message: str, attempt_count: int = 1):
     """Handle failed jobs - send to DLQ after multiple failures."""
     import json
-    from pathlib import Path
     from datetime import datetime
-    
+
     job_id = job.get('job_id', 'unknown')
     job_type = job.get('job_type', 'unknown')
-    
+
     print(f"💀 Job failure #{attempt_count}: {job_id} ({job_type}) - {error_message}")
-    
+
     # DLQ threshold - send to DLQ after 3 failures
     max_attempts = 3
-    
+
     if attempt_count >= max_attempts:
         # Send to Dead Letter Queue (file-based for simplicity)
         dlq_path = Path("/cache/dead_letter_queue")
         dlq_path.mkdir(exist_ok=True)
-        
+
         dlq_entry = {
             'job_id': job_id,
             'job_type': job_type,
@@ -752,16 +741,16 @@ def handle_failed_job(job, error_message: str, attempt_count: int = 1):
             'timestamp': datetime.now().isoformat(),
             'status': 'failed_permanently'
         }
-        
+
         dlq_file = dlq_path / f"{job_id}.json"
         with open(dlq_file, 'w') as f:
             json.dump(dlq_entry, f, indent=2, default=str)
-        
+
         print(f"💀 Job sent to DLQ: {dlq_file}")
-        
+
         # TODO: Send alert (email, Slack, etc.)
         print(f"🚨 ALERT: Job {job_id} failed permanently after {attempt_count} attempts")
-        
+
         return {'status': 'sent_to_dlq', 'path': str(dlq_file)}
     else:
         # TODO: Implement retry logic if needed
@@ -780,7 +769,7 @@ def queue_status():
         cache_size = len(list(cache_index.keys())) if hasattr(cache_index, 'keys') else 0
     except:
         cache_size = 0
-        
+
     return {
         'training_queue': training_queue.len(),
         'test_queue': test_queue.len(),
@@ -801,11 +790,10 @@ def queue_status():
 @modal.fastapi_endpoint(method="GET")
 def check_dlq_status():
     """Check Dead Letter Queue status for monitoring via HTTP endpoint."""
-    from pathlib import Path
     import json
-    
+
     dlq_path = Path("/cache/dead_letter_queue")
-    
+
     if not dlq_path.exists():
         return {
             'dlq_count': 0,
@@ -813,11 +801,11 @@ def check_dlq_status():
             'message': 'No DLQ directory (no failures yet)',
             'timestamp': time.time()
         }
-    
+
     # Count DLQ entries
     dlq_files = list(dlq_path.glob("*.json"))
     dlq_count = len(dlq_files)
-    
+
     # Get recent failures (last 5)
     recent_failures = []
     for dlq_file in sorted(dlq_files, key=lambda x: x.stat().st_mtime, reverse=True)[:5]:
@@ -832,9 +820,9 @@ def check_dlq_status():
                 })
         except Exception as e:
             recent_failures.append({'error': f'Failed to read {dlq_file.name}: {e}'})
-    
+
     status = 'healthy' if dlq_count == 0 else 'has_failures'
-    
+
     return {
         'dlq_count': dlq_count,
         'status': status,
@@ -851,7 +839,7 @@ def clear_queues():
     test_queue.clear()
     generation_queue.clear()
     results_queue.clear()
-    
+
     return {
         'status': 'cleared',
         'timestamp': time.time()
@@ -869,17 +857,17 @@ def health_check():
             'generation_queue': generation_queue.len(),
             'results_queue': results_queue.len()
         }
-        
+
         # Check cache
         try:
             cache_size = len(list(cache_index.keys()))
         except:
             cache_size = 0
-        
+
         # Overall health
         total_queued = sum(queue_lengths.values())
         is_healthy = total_queued < 1000  # Arbitrary threshold
-        
+
         return {
             'status': 'healthy' if is_healthy else 'busy',
             'queues': queue_lengths,
@@ -907,34 +895,34 @@ def start_workers_for_run(run_id: str, training_workers: int = 2, test_workers: 
     Start workers for a specific run using predictable queue names.
     """
     import modal
-    
+
     print(f"🚀 Starting workers for run: {run_id}")
-    
+
     # Create/lookup queues using predictable names
     queue_prefix = f"coral-{run_id}"
     training_queue = modal.Queue.from_name(f"{queue_prefix}-training", create_if_missing=True)
     test_queue = modal.Queue.from_name(f"{queue_prefix}-test", create_if_missing=True)
     results_queue = modal.Queue.from_name(f"{queue_prefix}-results", create_if_missing=True)
-    
+
     print(f"📡 Using queues with prefix: {queue_prefix}")
-    
+
     # Shared cache index
     cache_index = {}
-    
+
     # Spawn training workers
     training_futures = []
     for i in range(training_workers):
         future = training_worker_with_queues.spawn(training_queue, results_queue, cache_index)
         training_futures.append(future)
         print(f"🏗️  Started training worker {i + 1}")
-    
+
     # Spawn test workers
     test_futures = []
     for i in range(test_workers):
         future = test_worker_with_queues.spawn(test_queue, results_queue, cache_index)
         test_futures.append(future)
         print(f"🧪 Started test worker {i + 1}")
-    
+
     return {
         'run_id': run_id,
         'queue_prefix': queue_prefix,
@@ -950,16 +938,16 @@ def spawn_workers_with_queues(training_queue, test_queue, results_queue, cache_i
     for i in range(training_workers):
         future = training_worker.spawn()  # No parameters - uses global queues
         training_futures.append(future)
-    
+
     # Spawn test workers (category theory compliant)
     test_futures = []
     for i in range(test_workers):
         future = test_worker.spawn()  # No parameters - uses global queues
         test_futures.append(future)
-    
+
     print(f"🏗️ Started {len(training_futures)} training workers, {len(test_futures)} test workers")
     print("🧮 Category theory: Workers automatically reference global queue objects")
-    
+
     return {
         'training_workers': len(training_futures),
         'test_workers': len(test_futures),
@@ -986,51 +974,50 @@ def run_experiment_with_queues(config_dict):
     """Run experiment using queue-based coordination."""
     import sys
     import json
-    from pathlib import Path
-    
+
     # Add coralx to Python path
     coralx_path = Path("/root/coralx")
     if not coralx_path.exists():
         raise RuntimeError("  CoralX codebase not found in Modal environment")
     sys.path.insert(0, str(coralx_path))
-    
-    print(f"🚀 Starting queue-based CORAL-X experiment")
-    
+
+    print("🚀 Starting queue-based CORAL-X experiment")
+
     # Parse config
     if isinstance(config_dict, str):
         config_dict = json.loads(config_dict)
-    
+
     # Create ephemeral queues for this experiment
     with modal.Queue.ephemeral() as training_queue, \
          modal.Queue.ephemeral() as generation_queue, \
          modal.Queue.ephemeral() as test_queue, \
          modal.Queue.ephemeral() as results_queue, \
          modal.Dict.ephemeral() as cache_index:
-        
+
         # Import evolution infrastructure
         from core.config.loader import create_config_from_dict
         from core.domain.experiment import create_experiment_config, create_initial_population
         from plugins.quixbugs_codellama.plugin import QuixBugsCodeLlamaRealPlugin
         from infra.queue_modal_executor import QueueModalExecutor
-        
+
         # Create structured configs
         coral_config = create_config_from_dict(config_dict)
         exp_config = create_experiment_config(config_dict)
-        
+
         # Load plugin
         plugin = QuixBugsCodeLlamaRealPlugin(config_dict)
-        
+
         # Create category theory compliant queue executor (global queues)
         executor = QueueModalExecutor(config_dict)
-        
+
         # Create initial population
         diversity_strength = 0.4
         run_id = config_dict.get('cache', {}).get('run_id', None)
         init_pop = create_initial_population(exp_config, diversity_strength, raw_config=config_dict, run_id=run_id)
-        
+
         # Start workers with queue references
         spawn_workers_with_queues(training_queue, test_queue, results_queue, cache_index)
-        
+
         # Create evolution engine with queue executor
         from core.application.evolution_engine import EvolutionEngine
         engine = EvolutionEngine(
@@ -1042,10 +1029,10 @@ def run_experiment_with_queues(config_dict):
             run_id=run_id,
             raw_config=config_dict
         )
-        
+
         # Run evolution
         winners = engine.run(init_pop)
-        
+
         # Create result
         best_genome = winners.best() if winners.size() > 0 else None
         result = {
@@ -1056,8 +1043,8 @@ def run_experiment_with_queues(config_dict):
             'final_population_size': winners.size(),
             'run_location': 'modal-queues'
         }
-        
-        print(f"✅ Queue-based evolution completed successfully")
+
+        print("✅ Queue-based evolution completed successfully")
         return result
 
 # ========================================
@@ -1074,11 +1061,10 @@ def run_experiment_with_queues(config_dict):
 @modal.fastapi_endpoint(method="GET")
 def get_evolution_progress_modal(config_dict=None):
     """Get evolution progress from cache volume via HTTP endpoint."""
-    from pathlib import Path
     import json
-    
+
     progress_file = Path("/cache/evolution_progress.json")
-    
+
     if not progress_file.exists():
         return {
             "status": "not_started",
@@ -1087,7 +1073,7 @@ def get_evolution_progress_modal(config_dict=None):
             "max_generations": 0,
             "best_fitness": 0.0
         }
-    
+
     try:
         with open(progress_file, 'r') as f:
             progress = json.load(f)
@@ -1110,15 +1096,14 @@ def get_evolution_progress_modal(config_dict=None):
 )
 def update_evolution_progress_modal(progress_dict):
     """Update evolution progress in cache volume."""
-    from pathlib import Path
     import json
     import time
-    
+
     progress_file = Path("/cache/evolution_progress.json")
-    
+
     # Add timestamp
     progress_dict['last_update'] = time.time()
-    
+
     try:
         with open(progress_file, 'w') as f:
             json.dump(progress_dict, f, indent=2)
@@ -1133,4 +1118,4 @@ def update_evolution_progress_modal(progress_dict):
 
 if __name__ == "__main__":
     print("🪸 CORAL-X Queue-Based Modal App")
-    print("Deploy with: modal deploy coral_queue_modal_app.py") 
+    print("Deploy with: modal deploy coral_queue_modal_app.py")

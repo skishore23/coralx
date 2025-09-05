@@ -13,7 +13,7 @@ from core.domain.genome import Genome
 
 class ModelRunner(Protocol):
     """Protocol for running language models with LoRA adaptations."""
-    
+
     def generate(self, prompt: str, max_tokens: int) -> str:
         """Generate text from a prompt."""
         ...
@@ -21,7 +21,7 @@ class ModelRunner(Protocol):
 
 class DatasetProvider(Protocol):
     """Protocol for providing training/evaluation datasets."""
-    
+
     def problems(self) -> Iterable[Dict[str, Any]]:
         """Yield problem dictionaries with prompts and solutions."""
         ...
@@ -29,7 +29,7 @@ class DatasetProvider(Protocol):
 
 class FitnessFn(Protocol):
     """Protocol for fitness evaluation functions."""
-    
+
     def __call__(self,
                  genome: 'Genome',
                  model: ModelRunner,
@@ -40,7 +40,7 @@ class FitnessFn(Protocol):
 
 class Executor(Protocol):
     """Protocol for distributed/parallel execution."""
-    
+
     def submit(self, fn: Callable, *args, **kwargs) -> Future:
         """Submit a function for execution and return a Future."""
         ...
@@ -48,7 +48,7 @@ class Executor(Protocol):
 
 class ConfigLoader(Protocol):
     """Protocol for loading and parsing configurations."""
-    
+
     def load(self, path: str) -> Dict[str, Any]:
         """Load configuration from file path."""
         ...

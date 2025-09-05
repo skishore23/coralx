@@ -1,6 +1,6 @@
 """Pydantic configuration models for CORAL-X."""
 
-from typing import Dict, Any, List, Optional, Union
+from typing import Dict, Any, List, Optional
 from pathlib import Path
 from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
 from enum import Enum
@@ -49,14 +49,14 @@ class CAConfig(BaseModel):
     rule_range: List[int] = Field(default=[30, 255], min_length=2, max_length=2)
     steps_range: List[int] = Field(default=[5, 20], min_length=2, max_length=2)
     initial_density: float = Field(default=0.5, ge=0.0, le=1.0)
-    
+
     @field_validator('grid_size')
     @classmethod
     def validate_grid_size(cls, v):
         if any(size <= 0 for size in v):
             raise ValueError('Grid dimensions must be positive')
         return v
-    
+
     @field_validator('rule_range', 'steps_range')
     @classmethod
     def validate_ranges(cls, v):
@@ -72,14 +72,14 @@ class EvolutionConfig(BaseModel):
     alpha_candidates: List[int] = Field(default=[8, 16, 32], min_length=1)
     dropout_candidates: List[float] = Field(default=[0.05, 0.1, 0.15], min_length=1)
     target_modules: List[str] = Field(default=["q_proj", "v_proj"], min_length=1)
-    
+
     @field_validator('rank_candidates', 'alpha_candidates')
     @classmethod
     def validate_positive_integers(cls, v):
         if any(val <= 0 for val in v):
             raise ValueError('All candidates must be positive integers')
         return v
-    
+
     @field_validator('dropout_candidates')
     @classmethod
     def validate_dropout_range(cls, v):
@@ -98,7 +98,7 @@ class ExecutionConfig(BaseModel):
     crossover_rate: float = Field(default=0.7, ge=0.0, le=1.0)
     run_held_out_benchmark: bool = Field(default=False)
     current_generation: int = Field(default=0, ge=0)
-    
+
     @field_validator('crossover_rate')
     @classmethod
     def validate_crossover_rate(cls, v):
@@ -112,7 +112,7 @@ class DatasetConfig(BaseModel):
     dataset_path: Optional[Path] = None
     max_samples: Optional[int] = Field(None, gt=0)
     datasets: List[str] = Field(min_length=1)
-    
+
     @model_validator(mode='before')
     @classmethod
     def set_dataset_path(cls, values):
@@ -126,7 +126,7 @@ class ModelConfig(BaseModel):
     name: str
     model_name: Optional[str] = None
     max_seq_length: int = Field(default=512, gt=0, le=4096)
-    
+
     @model_validator(mode='before')
     @classmethod
     def set_model_name(cls, values):
@@ -166,7 +166,7 @@ class FitnessWeights(BaseModel):
     security: float = Field(ge=0.0, le=1.0)
     runtime: float = Field(ge=0.0, le=1.0)
     syntax: float = Field(ge=0.0, le=1.0)
-    
+
     @model_validator(mode='after')
     def validate_weights_sum(self):
         total = self.bugfix + self.style + self.security + self.runtime + self.syntax
@@ -202,6 +202,24 @@ class InfrastructureConfig(BaseModel):
     executor: ExecutorType
 
 
+class PlottingConfig(BaseModel):
+    """Plotting and visualization configuration."""
+    enabled: bool = Field(default=True)
+    output_dir: Path = Field(default=Path("./artifacts/plots"))
+    pareto_fronts: bool = Field(default=True)
+    hypervolume_progress: bool = Field(default=True)
+    generation_summaries: bool = Field(default=True)
+
+
+class ExportConfig(BaseModel):
+    """Export configuration for results."""
+    enabled: bool = Field(default=True)
+    output_dir: Path = Field(default=Path("./artifacts/exports"))
+    csv_per_generation: bool = Field(default=True)
+    csv_final_population: bool = Field(default=True)
+    jsonl_detailed: bool = Field(default=True)
+
+
 class CacheConfig(BaseModel):
     """Cache configuration."""
     artifacts_dir: Path
@@ -219,14 +237,14 @@ class CheapKnobsConfig(BaseModel):
     top_k_range: List[int] = Field(min_length=2, max_length=2)
     repetition_penalty_range: List[float] = Field(min_length=2, max_length=2)
     max_tokens_range: List[int] = Field(min_length=2, max_length=2)
-    
+
     @field_validator('temperature_range', 'top_p_range', 'repetition_penalty_range')
     @classmethod
     def validate_float_ranges(cls, v):
         if v[0] >= v[1]:
             raise ValueError('Range minimum must be less than maximum')
         return v
-    
+
     @field_validator('top_k_range', 'max_tokens_range')
     @classmethod
     def validate_int_ranges(cls, v):
@@ -242,7 +260,7 @@ class ObjectiveThresholds(BaseModel):
     security: float = Field(ge=0.0, le=1.0)
     style: float = Field(ge=0.0, le=1.0)
     syntax: float = Field(ge=0.0, le=1.0)
-    
+
     def to_dict(self) -> Dict[str, float]:
         """Convert to dictionary for compatibility with threshold gate functions."""
         return {
@@ -278,7 +296,7 @@ class OrganizationConfig(BaseModel):
 class ProjectPathsConfig(BaseModel):
     """Project-wide path configuration."""
     logs: str = Field(default="./logs")
-    cache: str = Field(default="./cache") 
+    cache: str = Field(default="./cache")
     runs: str = Field(default="./runs")
     datasets: str = Field(default="./datasets")
 
@@ -296,9 +314,11 @@ class CoralConfig(BaseModel):
     threshold: ThresholdConfig
     diversity: Optional[DiversityConfig] = Field(default_factory=DiversityConfig)
     organization: Optional[OrganizationConfig] = Field(default_factory=OrganizationConfig)
-    paths: Optional[ProjectPathsConfig] = Field(default_factory=ProjectPathsConfig)  
+    paths: Optional[ProjectPathsConfig] = Field(default_factory=ProjectPathsConfig)
+    plotting: Optional[PlottingConfig] = Field(default_factory=PlottingConfig)
+    export: Optional[ExportConfig] = Field(default_factory=ExportConfig)
     seed: int = Field(default=42)
-    
+
     model_config = ConfigDict(
         validate_assignment=True,
         extra="forbid"  # Disallow extra fields not defined in the schema

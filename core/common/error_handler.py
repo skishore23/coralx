@@ -1,16 +1,15 @@
 """Error handling middleware for CORAL-X."""
 
-from typing import Any, Callable, Optional
-from .exceptions import CoralError
+from typing import Any, Callable
 from .logging import get_logger
 
 
 class ErrorHandler:
     """Centralized error handling with logging and recovery strategies."""
-    
+
     def __init__(self, logger_name: str):
         self.logger = get_logger(logger_name)
-    
+
     def handle_error(self, error: Exception, context: str) -> None:
         """Handle an error with logging.
         
@@ -23,7 +22,7 @@ class ErrorHandler:
         """
         self.logger.error(f"Error occurred: error_type={type(error).__name__}, error_message={str(error)}, context={context}")
         raise error
-    
+
     def with_error_handling(self, context: str):
         """Decorator for automatic error handling.
         

@@ -26,11 +26,13 @@ htmlcov/
 cache/
 runs/
 datasets/
+results/
+artifacts/
+logs/
+temp_adapter*/
 *.log
 test_results/
 .cursorrules
-runs/
-temp_adapter/
 
 # Modal cloud
 .modal

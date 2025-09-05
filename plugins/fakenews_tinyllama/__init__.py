@@ -5,4 +5,4 @@ Integrates multi-objective AI safety evaluation with TinyLlama fine-tuning and U
 
 from .plugin import MultiModalAISafetyPlugin
 
-__all__ = ['MultiModalAISafetyPlugin'] 
+__all__ = ['MultiModalAISafetyPlugin']

@@ -1,1 +1,1 @@
-# Infrastructure adapters 
+# Infrastructure adapters

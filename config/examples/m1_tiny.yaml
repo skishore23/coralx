@@ -1,0 +1,81 @@
+# Tiny Run - End-to-End Tiny Run Configuration
+# Minimal configuration for tiny run testing with 1 generation, population ≤ 8
+
+seed: 42
+
+execution:
+  generations: 1
+  population_size: 8
+  output_dir: ./artifacts/tiny_run
+  selection_mode: tournament  # Use tournament selection for tiny run
+  survival_rate: 0.5
+  crossover_rate: 0.7
+  run_held_out_benchmark: false
+
+evo:
+  ca:
+    grid_size: [8, 8]
+    rule_range: [30, 255]
+    steps_range: [5, 20]
+    initial_density: 0.5
+  rank_candidates: [4, 8, 16]
+  alpha_candidates: [8, 16, 32]
+  dropout_candidates: [0.05, 0.1, 0.2]
+  target_modules: ["q_proj", "v_proj"]
+
+experiment:
+  target: quixbugs_mini  # Use mini QuixBugs for tiny run
+  name: tiny_run
+  dataset:
+    path: ./datasets
+    datasets: ["quixbugs_mini"]
+    max_samples: 3  # Only 3 bugs for tiny run
+  model:
+    name: mock_model_for_tiny_run  # Mock model for tiny run testing
+    max_seq_length: 512
+
+training:
+  batch_size: 1
+  gradient_accumulation_steps: 1
+  epochs: 1  # Minimal training for tiny run
+  learning_rate: 2e-4
+  warmup_steps: 0
+  logging_steps: 1
+  save_steps: 10
+  max_grad_norm: 1.0
+  weight_decay: 0.01
+  adam_epsilon: 1e-8
+
+evaluation:
+  test_samples: 3  # Test on all 3 tiny problems
+  fitness_weights:
+    bugfix: 0.4
+    style: 0.2
+    security: 0.1
+    runtime: 0.1
+    syntax: 0.2
+  baseline_testing:
+    enabled: false  # Disable for tiny run
+
+infra:
+  executor: local  # Use local executor for tiny run
+
+cache:
+  artifacts_dir: ./artifacts/tiny_run
+  base_checkpoint: mock_model_for_tiny_run
+  cleanup_threshold: 10  # Keep cache small for tiny run
+
+threshold:
+  base_thresholds:
+    bugfix: 0.3
+    style: 0.2
+    security: 0.1
+    runtime: 0.1
+    syntax: 0.2
+  max_thresholds:
+    bugfix: 0.9
+    style: 0.8
+    security: 0.7
+    runtime: 0.8
+    syntax: 0.9
+  schedule: linear

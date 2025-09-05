@@ -1,0 +1,96 @@
+# Multi-Objective Evolution Configuration
+# M2 - Multi-objective loop with Pareto ranking and multiple generations
+
+seed: 42
+
+execution:
+  generations: 3  # Multi-generation for M2
+  population_size: 12  # Larger population for diversity
+  output_dir: ./artifacts/multi_objective
+  selection_mode: pareto  # Use Pareto selection for M2
+  survival_rate: 0.6  # Keep more diversity
+  crossover_rate: 0.7
+  run_held_out_benchmark: false
+
+evo:
+  ca:
+    grid_size: [8, 8]
+    rule_range: [30, 255]
+    steps_range: [5, 20]
+    initial_density: 0.5
+  rank_candidates: [4, 8, 16, 32]  # More diversity
+  alpha_candidates: [8, 16, 32, 64]  # More diversity
+  dropout_candidates: [0.05, 0.1, 0.2, 0.3]  # More diversity
+  target_modules: ["q_proj", "v_proj"]
+
+experiment:
+  target: quixbugs_mini  # Use mini QuixBugs for M2 testing
+  name: multi_objective_run
+  dataset:
+    path: ./datasets
+    datasets: ["quixbugs_mini"]
+    max_samples: 3  # Keep small for M2 testing
+  model:
+    name: mock_model_for_multi_objective  # Mock model for M2 testing
+    max_seq_length: 512
+
+training:
+  batch_size: 1
+  gradient_accumulation_steps: 1
+  epochs: 2  # Slightly more training for M2
+  learning_rate: 2e-4
+  warmup_steps: 0
+  logging_steps: 1
+  save_steps: 10
+  max_grad_norm: 1.0
+  weight_decay: 0.01
+  adam_epsilon: 1e-8
+
+evaluation:
+  test_samples: 3  # Test on all 3 tiny problems
+  fitness_weights:
+    bugfix: 0.3      # Code correctness
+    style: 0.2       # Code style (flake8)
+    security: 0.2    # Security (bandit)
+    runtime: 0.15    # Efficiency
+    syntax: 0.15     # Syntax correctness
+  baseline_testing:
+    enabled: false  # Disable for M2
+
+infra:
+  executor: local  # Use local executor for M2
+
+cache:
+  artifacts_dir: ./artifacts/multi_objective
+  base_checkpoint: mock_model_for_multi_objective
+  cleanup_threshold: 20  # Keep more cache for M2
+
+threshold:
+  base_thresholds:
+    bugfix: 0.2      # Lower thresholds for M2
+    style: 0.1
+    security: 0.1
+    runtime: 0.1
+    syntax: 0.1
+  max_thresholds:
+    bugfix: 0.9
+    style: 0.8
+    security: 0.7
+    runtime: 0.8
+    syntax: 0.9
+  schedule: linear
+
+# M2 specific settings
+plotting:
+  enabled: true
+  output_dir: ./artifacts/multi_objective/plots
+  pareto_fronts: true
+  hypervolume_progress: true
+  generation_summaries: true
+
+export:
+  enabled: true
+  output_dir: ./artifacts/multi_objective/exports
+  csv_per_generation: true
+  csv_final_population: true
+  jsonl_detailed: true

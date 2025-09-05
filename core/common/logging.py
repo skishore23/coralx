@@ -2,7 +2,7 @@
 
 import logging
 import sys
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 from datetime import datetime
 
 try:
@@ -20,7 +20,7 @@ def setup_logging(log_level: str = "INFO", structured: bool = False) -> None:
         structured: Whether to use structured logging (if available)
     """
     log_level = getattr(logging, log_level.upper())
-    
+
     if STRUCTLOG_AVAILABLE and structured:
         # Configure structlog
         structlog.configure(
@@ -40,7 +40,7 @@ def setup_logging(log_level: str = "INFO", structured: bool = False) -> None:
             wrapper_class=structlog.stdlib.BoundLogger,
             cache_logger_on_first_use=True,
         )
-    
+
     # Configure standard library logging
     logging.basicConfig(
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
@@ -66,7 +66,7 @@ def get_logger(name: str) -> Any:
 
 class LoggingMixin:
     """Mixin class to add logging capability to any class."""
-    
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.logger = get_logger(self.__class__.__module__ + "." + self.__class__.__name__)
