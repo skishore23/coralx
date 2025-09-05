@@ -4,7 +4,7 @@ import argparse
 import sys
 from pathlib import Path
 
-def main():
+def main() -> None:
     """Simple CLI entry point."""
     parser = argparse.ArgumentParser(description="CORAL-X Evolution Framework")
 

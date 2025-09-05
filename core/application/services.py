@@ -72,8 +72,8 @@ def create_fitness_function(config: CoralConfig, run_id: Optional[str] = None) -
         from plugins.fakenews_tinyllama.plugin import MultiModalAISafetyFitness
         fitness_fn = MultiModalAISafetyFitness(config)
     elif target == "quixbugs_codellama":
-        from plugins.quixbugs_codellama.plugin import QuixBugsCodeLlamaFitnessFunction
-        fitness_fn = QuixBugsCodeLlamaFitnessFunction(config)
+        from plugins.quixbugs_codellama.plugin import QuixBugsRealFitness
+        fitness_fn = QuixBugsRealFitness(config)
     else:
         # Default fitness function
         from ..domain.fitness import DefaultFitnessFunction
@@ -99,7 +99,7 @@ def create_executor(config: CoralConfig) -> Executor:
 
     if executor_type == "modal":
         from infra.modal_executor import ModalExecutor
-        executor = ModalExecutor(config)
+        executor = ModalExecutor("coral-x-production", config.dict())
     elif executor_type == "local":
         from infra.executors.local import LocalExecutor
         executor = LocalExecutor()
@@ -119,7 +119,7 @@ class ServiceContainer:
         self.logger = get_logger(__name__)
 
         # Lazy-loaded services
-        self._evolution_services = None
+        self._evolution_services: Optional[EvolutionServices] = None
 
     def evolution_services(self, fitness_fn: Optional[FitnessFn] = None,
                           executor: Optional[Executor] = None,
