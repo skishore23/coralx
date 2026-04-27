@@ -60,12 +60,14 @@ class JSONLLogger(LoggingMixin):
             genome_data["ca_seed"] = {
                 "rule": genome.seed.rule,
                 "steps": genome.seed.steps,
-                "grid_shape": genome.seed.grid.shape
-                if hasattr(genome.seed, "grid")
-                else None,
-                "grid_sum": int(genome.seed.grid.sum())
-                if hasattr(genome.seed, "grid")
-                else None,
+                "grid_shape": (
+                    genome.seed.grid.shape if hasattr(genome.seed, "grid") else None
+                ),
+                "grid_sum": (
+                    int(genome.seed.grid.sum())
+                    if hasattr(genome.seed, "grid")
+                    else None
+                ),
             }
 
         # Add LoRA configuration

@@ -128,9 +128,11 @@ class ProgressTracker(LoggingMixin):
                 "%Y-%m-%d %H:%M:%S", time.localtime(current_time)
             ),
             "elapsed_time": elapsed_time,
-            "progress_percent": (self.current_generation / self.max_generations) * 100.0
-            if self.max_generations > 0
-            else 0.0,
+            "progress_percent": (
+                (self.current_generation / self.max_generations) * 100.0
+                if self.max_generations > 0
+                else 0.0
+            ),
         }
 
         # Add best genome information if available

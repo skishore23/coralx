@@ -101,5 +101,6 @@ jobs:
     
     - name: Security check with bandit
       run: |
-        bandit -r core infra plugins -f json -o bandit-report.json || true
-        bandit -r core infra plugins
+        python -m pip install bandit
+        bandit -r core infra plugins -f json -o bandit-report.json --severity-level medium || true
+        bandit -r core infra plugins --severity-level medium

@@ -153,9 +153,9 @@ def create_initial_population(
                 },
             },
             # Pass through adapter_type from raw config.
-            "adapter_type": raw_config.get("adapter_type", "lora")
-            if raw_config
-            else "lora",
+            "adapter_type": (
+                raw_config.get("adapter_type", "lora") if raw_config else "lora"
+            ),
         }
 
         # Apply dynamic diversity strength to LoRA mapping with genome-index entropy.

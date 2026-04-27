@@ -105,9 +105,11 @@ def run_gsm8k_lora_proof(
                 "+ loss_weight * exp(-held_out_answer_token_loss)"
             ),
             "exact_accuracy_reported": True,
-            "loss_weight": config.experiment.evaluation.get("loss_weight", 1.0)
-            if config.experiment.evaluation
-            else 1.0,
+            "loss_weight": (
+                config.experiment.evaluation.get("loss_weight", 1.0)
+                if config.experiment.evaluation
+                else 1.0
+            ),
         },
         "budget": {
             "evolution_generations": config.execution.generations,
@@ -138,9 +140,7 @@ def run_gsm8k_lora_proof(
         "interpretation": _interpret(
             evolution_best, base_record, fixed_record, random_best
         ),
-        "artifacts": {
-            "candidate_jsonl": str(candidate_jsonl)
-        },
+        "artifacts": {"candidate_jsonl": str(candidate_jsonl)},
     }
 
     destination = output_path or (config.execution.output_dir / "proof_report.json")
@@ -282,15 +282,17 @@ def _interpret(
         "exact_accuracy_evolution_beats_random_best": evo_accuracy is not None
         and random_accuracy is not None
         and evo_accuracy > random_accuracy,
-        "evolution_minus_base_model": evo_fitness - base_fitness
-        if evo_fitness is not None
-        else None,
-        "evolution_minus_fixed": evo_fitness - fixed_fitness
-        if evo_fitness is not None
-        else None,
-        "evolution_minus_random_best": evo_fitness - random_fitness
-        if evo_fitness is not None and random_fitness is not None
-        else None,
+        "evolution_minus_base_model": (
+            evo_fitness - base_fitness if evo_fitness is not None else None
+        ),
+        "evolution_minus_fixed": (
+            evo_fitness - fixed_fitness if evo_fitness is not None else None
+        ),
+        "evolution_minus_random_best": (
+            evo_fitness - random_fitness
+            if evo_fitness is not None and random_fitness is not None
+            else None
+        ),
         "exact_accuracy": {
             "evolution_best": evo_accuracy,
             "base_model": base_accuracy,

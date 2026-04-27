@@ -207,9 +207,9 @@ def test_m1_pipeline():
         survivors2 = tournament_select(
             test_population, k=4, tournament_size=3, rng=Random(42)
         )
-        assert survivors.genomes == survivors2.genomes, (
-            "Tournament selection not deterministic!"
-        )
+        assert (
+            survivors.genomes == survivors2.genomes
+        ), "Tournament selection not deterministic!"
         print("   ✅ Tournament selection is deterministic")
 
     except Exception as e:

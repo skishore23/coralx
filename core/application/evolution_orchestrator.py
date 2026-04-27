@@ -388,9 +388,9 @@ class EvolutionOrchestrator(LoggingMixin):
                 "genome_id": genome.id,
                 "run_id": genome.run_id,
                 "fitness": genome.fitness,
-                "multi_scores": genome.multi_scores.to_dict()
-                if genome.multi_scores
-                else None,
+                "multi_scores": (
+                    genome.multi_scores.to_dict() if genome.multi_scores else None
+                ),
                 "lora": {
                     "r": genome.lora_cfg.r,
                     "alpha": genome.lora_cfg.alpha,
