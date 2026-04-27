@@ -3,6 +3,7 @@
 M1 Test Script - End-to-End Tiny Run
 Tests the complete M1 pipeline with minimal configuration
 """
+
 import sys
 from pathlib import Path
 
@@ -10,13 +11,13 @@ from pathlib import Path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
 
-from core.common.config_loader import load_config
 from core.application.evolution_orchestrator import EvolutionOrchestrator
 from core.application.services import create_evolution_services
+from core.common.config_loader import load_config
 from core.services.jsonl_logger import JSONLLogger
 from core.services.reproducibility import ReproducibilityManager
-from plugins.quixbugs_mini.plugin import QuixBugsMiniPlugin
 from plugins.fakenews_mini.plugin import FakeNewsMiniPlugin
+from plugins.quixbugs_mini.plugin import QuixBugsMiniPlugin
 
 
 def test_m1_pipeline():
@@ -25,7 +26,7 @@ def test_m1_pipeline():
     print("=" * 50)
 
     # Load M1 configuration
-    config_path = project_root / "config" / "examples" / "tiny_run.yaml"
+    config_path = project_root / "config" / "examples" / "m1_tiny.yaml"
     print(f"Loading M1 config: {config_path}")
 
     try:
@@ -37,7 +38,7 @@ def test_m1_pipeline():
         print(f"   • Executor: {config.infra.executor}")
     except Exception as e:
         print(f"❌ Config loading failed: {e}")
-        assert False, f"Config loading failed: {e}"
+        raise AssertionError(f"Config loading failed: {e}") from e
 
     # Initialize reproducibility manager
     repro_manager = ReproducibilityManager(Path("./artifacts/tiny_run"))
@@ -50,12 +51,12 @@ def test_m1_pipeline():
             seed=config.seed,
             config=config.model_dump(),
             datasets={"quixbugs_mini": "3_problems_mock"},
-            checkpoints={"base_model": "mock_model_for_m1"}
+            checkpoints={"base_model": "mock_model_for_m1"},
         )
         print(f"✅ repro.lock created: {repro_info.experiment_id}")
     except Exception as e:
         print(f"❌ repro.lock creation failed: {e}")
-        assert False, f"repro.lock creation failed: {e}"
+        raise AssertionError(f"repro.lock creation failed: {e}") from e
 
     # Initialize JSONL logger
     jsonl_logger = JSONLLogger(Path("./artifacts/tiny_run/evolution.jsonl"))
@@ -79,15 +80,17 @@ def test_m1_pipeline():
 
         # Test model factory
         model_factory = quixbugs_plugin.model_factory()
+        assert callable(model_factory)
         print("✅ Model factory created")
 
         # Test fitness function
         fitness_fn = quixbugs_plugin.fitness_fn()
+        assert fitness_fn is not None
         print("✅ Fitness function created")
 
     except Exception as e:
         print(f"❌ Plugin loading failed: {e}")
-        assert False, f"Plugin loading failed: {e}"
+        raise AssertionError(f"Plugin loading failed: {e}") from e
 
     # Test FakeNews Mini plugin
     try:
@@ -117,7 +120,7 @@ def test_m1_pipeline():
 
     except Exception as e:
         print(f"❌ Evolution services creation failed: {e}")
-        assert False, f"Evolution services creation failed: {e}"
+        raise AssertionError(f"Evolution services creation failed: {e}") from e
 
     # Test evolution orchestrator
     print("\n🎯 Testing Evolution Orchestrator")
@@ -126,13 +129,14 @@ def test_m1_pipeline():
     try:
         # Create EvolutionServices object
         from core.application.evolution_orchestrator import EvolutionServices
+
         evolution_services = EvolutionServices(
             population_manager=services.population_manager,
             genetic_operations=services.genetic_operations,
             progress_tracker=services.progress_tracker,
             fitness_fn=services.fitness_fn,
             executor=services.executor,
-            config=config
+            config=config,
         )
 
         orchestrator = EvolutionOrchestrator(evolution_services)
@@ -141,6 +145,7 @@ def test_m1_pipeline():
         # Test population initialization (async method)
         print("   Testing population initialization...")
         import asyncio
+
         initial_population = asyncio.run(orchestrator._initialize_population())
         print(f"   ✅ Initial population created: {initial_population.size()} genomes")
 
@@ -149,50 +154,48 @@ def test_m1_pipeline():
         print("   ✅ Population validation passed")
 
         # Test diversity metrics
-        diversity = services.population_manager.calculate_diversity_metrics(initial_population)
+        diversity = services.population_manager.calculate_diversity_metrics(
+            initial_population
+        )
         print(f"   ✅ Diversity metrics calculated: {diversity}")
 
     except Exception as e:
         print(f"❌ Evolution orchestrator test failed: {e}")
-        assert False, f"Evolution orchestrator test failed: {e}"
+        raise AssertionError(f"Evolution orchestrator test failed: {e}") from e
 
     # Test tournament selection
     print("\n🏆 Testing Tournament Selection")
     print("-" * 30)
 
     try:
-        from core.domain.neat import tournament_select
         from random import Random
+
+        from core.domain.neat import tournament_select
 
         # Create test population with mock fitness scores
         test_genomes = []
         for i in range(8):
-            from core.domain.genome import Genome
-            from core.domain.ca import CASeed
-            from core.domain.mapping import LoRAConfig
             import numpy as np
 
+            from core.domain.ca import CASeed
+            from core.domain.genome import Genome
+            from core.domain.mapping import LoRAConfig
+
             # Create mock genome
-            seed = CASeed(
-                grid=np.random.randint(0, 2, (8, 8)),
-                rule=30 + i,
-                steps=10
-            )
+            seed = CASeed(grid=np.random.randint(0, 2, (8, 8)), rule=30 + i, steps=10)
             lora_cfg = LoRAConfig(
-                r=4 + i,
-                alpha=8.0 + i,
-                dropout=0.1,
-                target_modules=("q_proj", "v_proj")
+                r=4 + i, alpha=8.0 + i, dropout=0.1, target_modules=("q_proj", "v_proj")
             )
             genome = Genome(
                 seed=seed,
                 lora_cfg=lora_cfg,
                 id=f"test_genome_{i}",
-                fitness=0.5 + i * 0.1  # Mock fitness scores
+                fitness=0.5 + i * 0.1,  # Mock fitness scores
             )
             test_genomes.append(genome)
 
         from core.domain.neat import Population
+
         test_population = Population(tuple(test_genomes))
 
         # Test tournament selection
@@ -201,13 +204,17 @@ def test_m1_pipeline():
         print(f"   ✅ Tournament selection completed: {survivors.size()} survivors")
 
         # Verify deterministic behavior
-        survivors2 = tournament_select(test_population, k=4, tournament_size=3, rng=Random(42))
-        assert survivors.genomes == survivors2.genomes, "Tournament selection not deterministic!"
+        survivors2 = tournament_select(
+            test_population, k=4, tournament_size=3, rng=Random(42)
+        )
+        assert survivors.genomes == survivors2.genomes, (
+            "Tournament selection not deterministic!"
+        )
         print("   ✅ Tournament selection is deterministic")
 
     except Exception as e:
         print(f"❌ Tournament selection test failed: {e}")
-        assert False, f"Tournament selection test failed: {e}"
+        raise AssertionError(f"Tournament selection test failed: {e}") from e
 
     # Test JSONL logging
     print("\n📝 Testing JSONL Logging")
@@ -224,7 +231,7 @@ def test_m1_pipeline():
                 genome=genome,
                 generation=0,
                 evaluation_time=0.1 + i * 0.05,
-                additional_data={"test_run": True}
+                additional_data={"test_run": True},
             )
         print("   ✅ Test candidates logged")
 
@@ -235,7 +242,7 @@ def test_m1_pipeline():
             best_fitness=0.8,
             avg_fitness=0.6,
             diversity_metrics=diversity,
-            selection_info={"method": "tournament", "tournament_size": 3}
+            selection_info={"method": "tournament", "tournament_size": 3},
         )
         print("   ✅ Generation summary logged")
 
@@ -245,7 +252,7 @@ def test_m1_pipeline():
 
     except Exception as e:
         print(f"❌ JSONL logging test failed: {e}")
-        assert False, f"JSONL logging test failed: {e}"
+        raise AssertionError(f"JSONL logging test failed: {e}") from e
 
     print("\n🎉 M1 Test Pipeline Completed Successfully!")
     print("=" * 50)

@@ -5,48 +5,47 @@ This module implements threshold gates with σ-wave progression for
 evolutionary algorithms, enabling adaptive selection pressure that
 increases over generations according to CORAL-X architecture.
 """
-from dataclasses import dataclass
-from typing import Dict, List
+
 import math
-from .genome import Genome
+from dataclasses import dataclass
+
+from .genome import Genome, MultiObjectiveScores
 
 
 @dataclass(frozen=True)
 class ObjectiveThresholds:
     """Multi-objective threshold configuration."""
+
     bugfix: float
     style: float
     security: float
     runtime: float
     syntax: float  # NEW: Syntax correctness objective
 
-    def to_dict(self) -> Dict[str, float]:
+    def to_dict(self) -> dict[str, float]:
         """Convert to dictionary for easier iteration."""
         return {
-            'bugfix': self.bugfix,
-            'style': self.style,
-            'security': self.security,
-            'runtime': self.runtime,
-            'syntax': self.syntax
+            "bugfix": self.bugfix,
+            "style": self.style,
+            "security": self.security,
+            "runtime": self.runtime,
+            "syntax": self.syntax,
         }
 
 
 @dataclass(frozen=True)
 class ThresholdConfig:
     """Configuration for dynamic threshold evolution - NO DEFAULTS."""
+
     base_thresholds: ObjectiveThresholds
     max_thresholds: ObjectiveThresholds
     schedule: str  # linear | sqrt | sigmoid
 
 
-# Import MultiObjectiveScores from genome module to avoid duplication
-from .genome import MultiObjectiveScores
-
-
 def calculate_sigma(gen: int, max_gen: int, mode: str = "sigmoid") -> float:
     """
     Calculate σ-wave progression factor [0,1] - CORAL-X Architecture.
-    
+
     From architecture: sigma(gen) = 1/(1+exp(-12*(x-0.5))) where x = gen/max_gen
     This creates the dynamic threshold progression: loose early → strict at gen 40
     """
@@ -66,20 +65,26 @@ def calculate_sigma(gen: int, max_gen: int, mode: str = "sigmoid") -> float:
         raise ValueError(f"  Unknown threshold schedule mode: {mode}")
 
 
-def get_sla_targets() -> Dict[str, float]:
+def get_sla_targets() -> dict[str, float]:
     """Get SLA targets from CORAL-X architecture specification."""
     return {
-        'bugfix': 0.90,    # Architecture: ≥ 0.90 BugFix rate at MAX_GEN
-        'style': 0.97,     # Architecture: ≥ 0.97 Style score
-        'security': 1.0,   # Architecture: 1.0 Security flag (no security issues)
-        'runtime': 0.90    # Architecture: ≥ 0.90 Runtime speed‑up
+        "bugfix": 0.90,  # Architecture: ≥ 0.90 BugFix rate at MAX_GEN
+        "style": 0.97,  # Architecture: ≥ 0.97 Style score
+        "security": 1.0,  # Architecture: 1.0 Security flag (no security issues)
+        "runtime": 0.90,  # Architecture: ≥ 0.90 Runtime speed‑up
     }
 
 
-def calculate_dynamic_thresholds(gen: int, max_gen: int, config: ThresholdConfig) -> ObjectiveThresholds:
+def calculate_dynamic_thresholds(
+    gen: int, max_gen: int, config: ThresholdConfig
+) -> ObjectiveThresholds:
     """Calculate current thresholds based on generation and σ-wave."""
     # Convert enum to string value
-    schedule_str = config.schedule.value if hasattr(config.schedule, 'value') else str(config.schedule)
+    schedule_str = (
+        config.schedule.value
+        if hasattr(config.schedule, "value")
+        else str(config.schedule)
+    )
     sigma = calculate_sigma(gen, max_gen, schedule_str)
 
     base = config.base_thresholds.to_dict()
@@ -92,8 +97,9 @@ def calculate_dynamic_thresholds(gen: int, max_gen: int, config: ThresholdConfig
     return ObjectiveThresholds(**current)
 
 
-def apply_threshold_gate(scores: MultiObjectiveScores,
-                        thresholds: ObjectiveThresholds) -> bool:
+def apply_threshold_gate(
+    scores: MultiObjectiveScores, thresholds: ObjectiveThresholds
+) -> bool:
     """Apply threshold gate - returns True if genome passes all thresholds."""
     score_dict = scores.to_dict()
     threshold_dict = thresholds.to_dict()
@@ -105,9 +111,9 @@ def apply_threshold_gate(scores: MultiObjectiveScores,
     return True
 
 
-def filter_population_by_thresholds(genomes: List[Genome],
-                                   score_extractor,
-                                   thresholds: ObjectiveThresholds) -> List[Genome]:
+def filter_population_by_thresholds(
+    genomes: list[Genome], score_extractor, thresholds: ObjectiveThresholds
+) -> list[Genome]:
     """Filter population by threshold gate."""
     survivors = []
 

@@ -5,10 +5,13 @@ This module analyzes cellular automata state histories to extract meaningful
 features used for LoRA parameter mapping. All functions are pure and
 vectorizable for efficient computation.
 """
+
 from dataclasses import dataclass
+
 import numpy as np
-from scipy import stats
+
 from .ca import CAStateHistory
+from .stable_hash import stable_digest
 
 
 @dataclass(frozen=True)
@@ -32,7 +35,7 @@ def extract_features(hist: CAStateHistory) -> CAFeatures:
         complexity=complexity,
         intensity=intensity,
         periodicity=periodicity,
-        convergence=convergence
+        convergence=convergence,
     )
 
 
@@ -80,9 +83,7 @@ def _calculate_spatial_complexity(grid) -> float:
     for i in range(height):
         for j in range(width):
             # Check 4-connected neighbors
-            neighbors = [
-                (i-1, j), (i+1, j), (i, j-1), (i, j+1)
-            ]
+            neighbors = [(i - 1, j), (i + 1, j), (i, j - 1), (i, j + 1)]
 
             for ni, nj in neighbors:
                 if 0 <= ni < height and 0 <= nj < width:
@@ -99,8 +100,10 @@ def _calculate_spatial_complexity(grid) -> float:
             for j in range(width - 1):
                 # Extract 2x2 window as tuple
                 window = (
-                    grid[i, j], grid[i, j+1],
-                    grid[i+1, j], grid[i+1, j+1]
+                    grid[i, j],
+                    grid[i, j + 1],
+                    grid[i + 1, j],
+                    grid[i + 1, j + 1],
                 )
                 patterns.add(window)
 
@@ -115,9 +118,9 @@ def _calculate_spatial_complexity(grid) -> float:
 
     # Combine multiple spatial measures
     spatial_score = (
-        0.4 * edge_density +
-        0.4 * pattern_diversity +
-        0.2 * min(1.0, variance_complexity * 4)  # Scale variance to [0,1]
+        0.4 * edge_density
+        + 0.4 * pattern_diversity
+        + 0.2 * min(1.0, variance_complexity * 4)  # Scale variance to [0,1]
     )
 
     return min(1.0, spatial_score)
@@ -132,7 +135,7 @@ def _calculate_intensity(grids) -> float:
     total_cells = 0
 
     for i in range(1, len(grids)):
-        changes = np.sum(grids[i] != grids[i-1])
+        changes = np.sum(grids[i] != grids[i - 1])
         total_changes += changes
         total_cells += grids[i].size
 
@@ -145,7 +148,7 @@ def _calculate_periodicity(grids) -> float:
         return 0.0
 
     # Calculate hash for each grid to detect cycles
-    grid_hashes = [hash(grid.tobytes()) for grid in grids]
+    grid_hashes = [stable_digest(grid) for grid in grids]
 
     # Look for repeating patterns
     max_period_score = 0.0
@@ -173,7 +176,7 @@ def _calculate_convergence(grids) -> float:
     # Calculate the rate of change decay
     changes = []
     for i in range(1, len(grids)):
-        change_rate = np.sum(grids[i] != grids[i-1]) / grids[i].size
+        change_rate = np.sum(grids[i] != grids[i - 1]) / grids[i].size
         changes.append(change_rate)
 
     if not changes:
@@ -182,7 +185,7 @@ def _calculate_convergence(grids) -> float:
     # Measure convergence as the negative slope of change rate
     time_steps = np.arange(len(changes))
     if len(changes) > 1:
-        slope, _, _, _, _ = stats.linregress(time_steps, changes)
+        slope = float(np.polyfit(time_steps, changes, 1)[0])
         # Convert slope to convergence score (higher = more convergent)
         convergence_score = max(0.0, -slope)
         return min(1.0, convergence_score)

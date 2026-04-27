@@ -1,0 +1,88 @@
+# Experimental Gemma 4 E2B micro run.
+# This is a real local model experiment, not the canonical no-download smoke path.
+
+seed: 42
+
+execution:
+  generations: 2
+  population_size: 2
+  output_dir: ./artifacts/gemma4_e2b_micro
+  selection_mode: tournament
+  survival_rate: 0.5
+  crossover_rate: 0.7
+  run_held_out_benchmark: false
+
+evo:
+  ca:
+    grid_size: [6, 6]
+    rule_range: [30, 255]
+    steps_range: [4, 12]
+    initial_density: 0.5
+  rank_candidates: [4, 8]
+  alpha_candidates: [8, 16]
+  dropout_candidates: [0.05, 0.1]
+  target_modules: ["q_proj", "v_proj"]
+
+cheap_knobs:
+  temperature_range: [0.1, 0.7]
+  top_p_range: [0.8, 0.95]
+  top_k_range: [20, 80]
+  repetition_penalty_range: [1.0, 1.15]
+  max_tokens_range: [64, 128]
+
+experiment:
+  target: quixbugs_gemma4
+  name: gemma4_e2b_micro
+  dataset:
+    path: ./datasets
+    datasets: ["quixbugs_mini"]
+    max_samples: 1
+  model:
+    name: google/gemma-4-E2B-it
+    max_seq_length: 512
+
+training:
+  batch_size: 1
+  gradient_accumulation_steps: 1
+  epochs: 1
+  learning_rate: 2e-4
+  warmup_steps: 0
+  logging_steps: 1
+  save_steps: 10
+  max_grad_norm: 1.0
+  weight_decay: 0.01
+  adam_epsilon: 1e-8
+
+evaluation:
+  test_samples: 1
+  fitness_weights:
+    bugfix: 0.5
+    style: 0.1
+    security: 0.15
+    runtime: 0.1
+    syntax: 0.15
+  baseline_testing:
+    enabled: false
+
+infra:
+  executor: local
+
+cache:
+  artifacts_dir: ./artifacts/gemma4_e2b_micro
+  base_checkpoint: google/gemma-4-E2B-it
+  cleanup_threshold: 10
+
+threshold:
+  base_thresholds:
+    bugfix: 0.0
+    style: 0.0
+    security: 0.0
+    runtime: 0.0
+    syntax: 0.0
+  max_thresholds:
+    bugfix: 0.9
+    style: 0.8
+    security: 0.8
+    runtime: 0.8
+    syntax: 0.9
+  schedule: linear

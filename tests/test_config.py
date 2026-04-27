@@ -1,15 +1,20 @@
 """Test configuration validation and loading."""
 
-import pytest
 import tempfile
-import yaml
 from pathlib import Path
+
+import pytest
+import yaml
 from pydantic import ValidationError
 
 from core.common.config import (
-    CoralConfig, ExecutionConfig, EvolutionConfig, ObjectiveThresholds, FitnessWeights
+    CoralConfig,
+    EvolutionConfig,
+    ExecutionConfig,
+    FitnessWeights,
+    ObjectiveThresholds,
 )
-from core.common.config_loader import load_config, ConfigManager
+from core.common.config_loader import ConfigManager, load_config
 from core.common.exceptions import ConfigurationError
 
 
@@ -22,7 +27,7 @@ def test_execution_config_validation():
         "output_dir": "./results",
         "selection_mode": "pareto",
         "survival_rate": 0.5,
-        "crossover_rate": 0.7
+        "crossover_rate": 0.7,
     }
 
     config = ExecutionConfig(**valid_config)
@@ -40,7 +45,7 @@ def test_execution_config_validation():
             generations=10,
             population_size=50,
             output_dir="./results",
-            selection_mode="invalid_mode"
+            selection_mode="invalid_mode",
         )
 
 
@@ -51,7 +56,7 @@ def test_evolution_config_validation():
         "rank_candidates": [4, 8, 16, 32],
         "alpha_candidates": [8, 16, 32],
         "dropout_candidates": [0.05, 0.1, 0.15],
-        "target_modules": ["q_proj", "v_proj"]
+        "target_modules": ["q_proj", "v_proj"],
     }
 
     config = EvolutionConfig(**valid_config)
@@ -64,7 +69,7 @@ def test_evolution_config_validation():
             rank_candidates=[-1, 8],
             alpha_candidates=[8, 16],
             dropout_candidates=[0.05, 0.1],
-            target_modules=["q_proj", "v_proj"]
+            target_modules=["q_proj", "v_proj"],
         )
 
     # Invalid config - dropout out of range
@@ -73,7 +78,7 @@ def test_evolution_config_validation():
             rank_candidates=[4, 8],
             alpha_candidates=[8, 16],
             dropout_candidates=[1.5, 0.1],  # 1.5 > 1.0
-            target_modules=["q_proj", "v_proj"]
+            target_modules=["q_proj", "v_proj"],
         )
 
 
@@ -85,24 +90,24 @@ def test_fitness_weights_validation():
         "style": 0.15,
         "security": 0.25,
         "runtime": 0.1,
-        "syntax": 0.2
+        "syntax": 0.2,
     }
 
     weights = FitnessWeights(**valid_weights)
     assert weights.bugfix == 0.3
     # Test that weights sum to 1.0 (validated by Pydantic)
-    total = weights.bugfix + weights.style + weights.security + weights.runtime + weights.syntax
+    total = (
+        weights.bugfix
+        + weights.style
+        + weights.security
+        + weights.runtime
+        + weights.syntax
+    )
     assert abs(total - 1.0) < 0.01
 
     # Invalid config - weights don't sum to 1.0
     with pytest.raises(ValidationError):
-        FitnessWeights(
-            bugfix=0.5,
-            style=0.5,
-            security=0.5,
-            runtime=0.5,
-            syntax=0.5
-        )
+        FitnessWeights(bugfix=0.5, style=0.5, security=0.5, runtime=0.5, syntax=0.5)
 
 
 def test_objective_thresholds_validation():
@@ -113,7 +118,7 @@ def test_objective_thresholds_validation():
         "style": 0.1,
         "security": 0.1,
         "runtime": 0.1,
-        "syntax": 0.1
+        "syntax": 0.1,
     }
 
     thresholds = ObjectiveThresholds(**valid_thresholds)
@@ -135,26 +140,26 @@ def test_complete_config_validation():
             "output_dir": "./results",
             "selection_mode": "pareto",
             "survival_rate": 0.5,
-            "crossover_rate": 0.7
+            "crossover_rate": 0.7,
         },
         "evo": {
             "rank_candidates": [4, 8, 16],
             "alpha_candidates": [8, 16, 32],
             "dropout_candidates": [0.05, 0.1, 0.15],
-            "target_modules": ["q_proj", "v_proj"]
+            "target_modules": ["q_proj", "v_proj"],
         },
         "experiment": {
-            "target": "fakenews_tinyllama",
+            "target": "quixbugs_mini",
             "name": "test_experiment",
             "dataset": {
                 "path": "./datasets",
                 "max_samples": 100,
-                "datasets": ["fake_news"]
+                "datasets": ["quixbugs_mini"],
             },
             "model": {
-                "name": "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
-                "max_seq_length": 512
-            }
+                "name": "mock_model_for_tiny_run",
+                "max_seq_length": 512,
+            },
         },
         "evaluation": {
             "test_samples": 10,
@@ -163,15 +168,13 @@ def test_complete_config_validation():
                 "style": 0.15,
                 "security": 0.25,
                 "runtime": 0.1,
-                "syntax": 0.2
-            }
+                "syntax": 0.2,
+            },
         },
-        "infra": {
-            "executor": "local"
-        },
+        "infra": {"executor": "local"},
         "cache": {
             "artifacts_dir": "./cache",
-            "base_checkpoint": "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+            "base_checkpoint": "mock_model_for_tiny_run",
         },
         "threshold": {
             "base_thresholds": {
@@ -179,17 +182,17 @@ def test_complete_config_validation():
                 "style": 0.1,
                 "security": 0.1,
                 "runtime": 0.1,
-                "syntax": 0.1
+                "syntax": 0.1,
             },
             "max_thresholds": {
                 "bugfix": 0.8,
                 "style": 0.8,
                 "security": 0.8,
                 "runtime": 0.8,
-                "syntax": 0.8
-            }
+                "syntax": 0.8,
+            },
         },
-        "seed": 42
+        "seed": 42,
     }
 
     config = CoralConfig(**valid_config)
@@ -209,26 +212,26 @@ def test_config_loader():
             "output_dir": "./results/test",
             "selection_mode": "pareto",
             "survival_rate": 0.5,
-            "crossover_rate": 0.7
+            "crossover_rate": 0.7,
         },
         "evo": {
             "rank_candidates": [4, 8],
             "alpha_candidates": [8, 16],
             "dropout_candidates": [0.05, 0.1],
-            "target_modules": ["q_proj", "v_proj"]
+            "target_modules": ["q_proj", "v_proj"],
         },
         "experiment": {
-            "target": "fakenews_tinyllama",
+            "target": "quixbugs_mini",
             "name": "loader_test",
             "dataset": {
                 "path": "./datasets",
                 "max_samples": 50,
-                "datasets": ["fake_news"]
+                "datasets": ["quixbugs_mini"],
             },
             "model": {
-                "name": "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
-                "max_seq_length": 512
-            }
+                "name": "mock_model_for_tiny_run",
+                "max_seq_length": 512,
+            },
         },
         "evaluation": {
             "test_samples": 5,
@@ -237,15 +240,13 @@ def test_config_loader():
                 "style": 0.15,
                 "security": 0.25,
                 "runtime": 0.1,
-                "syntax": 0.2
-            }
+                "syntax": 0.2,
+            },
         },
-        "infra": {
-            "executor": "local"
-        },
+        "infra": {"executor": "local"},
         "cache": {
             "artifacts_dir": "./cache/test",
-            "base_checkpoint": "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+            "base_checkpoint": "mock_model_for_tiny_run",
         },
         "threshold": {
             "base_thresholds": {
@@ -253,20 +254,20 @@ def test_config_loader():
                 "style": 0.1,
                 "security": 0.1,
                 "runtime": 0.1,
-                "syntax": 0.1
+                "syntax": 0.1,
             },
             "max_thresholds": {
                 "bugfix": 0.8,
                 "style": 0.8,
                 "security": 0.8,
                 "runtime": 0.8,
-                "syntax": 0.8
-            }
+                "syntax": 0.8,
+            },
         },
-        "seed": 123
+        "seed": 123,
     }
 
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
         yaml.dump(config_data, f)
         temp_config_path = Path(f.name)
 
@@ -290,7 +291,7 @@ def test_config_loader_missing_file():
 
 def test_config_loader_invalid_yaml():
     """Test configuration loading with invalid YAML."""
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
         f.write("invalid: yaml: content: [")
         temp_config_path = Path(f.name)
 
@@ -311,26 +312,26 @@ def test_config_manager():
             "output_dir": "./results/manager_test",
             "selection_mode": "pareto",
             "survival_rate": 0.5,
-            "crossover_rate": 0.7
+            "crossover_rate": 0.7,
         },
         "evo": {
             "rank_candidates": [4, 8],
             "alpha_candidates": [8, 16],
             "dropout_candidates": [0.05, 0.1],
-            "target_modules": ["q_proj", "v_proj"]
+            "target_modules": ["q_proj", "v_proj"],
         },
         "experiment": {
-            "target": "fakenews_tinyllama",
+            "target": "quixbugs_mini",
             "name": "manager_test",
             "dataset": {
                 "path": "./datasets",
                 "max_samples": 20,
-                "datasets": ["fake_news"]
+                "datasets": ["quixbugs_mini"],
             },
             "model": {
-                "name": "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
-                "max_seq_length": 512
-            }
+                "name": "mock_model_for_tiny_run",
+                "max_seq_length": 512,
+            },
         },
         "evaluation": {
             "test_samples": 3,
@@ -339,15 +340,13 @@ def test_config_manager():
                 "style": 0.15,
                 "security": 0.25,
                 "runtime": 0.1,
-                "syntax": 0.2
-            }
+                "syntax": 0.2,
+            },
         },
-        "infra": {
-            "executor": "local"
-        },
+        "infra": {"executor": "local"},
         "cache": {
             "artifacts_dir": "./cache/manager_test",
-            "base_checkpoint": "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+            "base_checkpoint": "mock_model_for_tiny_run",
         },
         "threshold": {
             "base_thresholds": {
@@ -355,20 +354,20 @@ def test_config_manager():
                 "style": 0.1,
                 "security": 0.1,
                 "runtime": 0.1,
-                "syntax": 0.1
+                "syntax": 0.1,
             },
             "max_thresholds": {
                 "bugfix": 0.8,
                 "style": 0.8,
                 "security": 0.8,
                 "runtime": 0.8,
-                "syntax": 0.8
-            }
+                "syntax": 0.8,
+            },
         },
-        "seed": 456
+        "seed": 456,
     }
 
-    with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
         yaml.dump(config_data, f)
         temp_config_path = Path(f.name)
 
@@ -403,26 +402,26 @@ def test_environment_overrides():
                 "output_dir": "./results",
                 "selection_mode": "pareto",
                 "survival_rate": 0.5,
-                "crossover_rate": 0.7
+                "crossover_rate": 0.7,
             },
             "evo": {
                 "rank_candidates": [4, 8],
                 "alpha_candidates": [8, 16],
                 "dropout_candidates": [0.05, 0.1],
-                "target_modules": ["q_proj", "v_proj"]
+                "target_modules": ["q_proj", "v_proj"],
             },
             "experiment": {
-                "target": "fakenews_tinyllama",
+                "target": "quixbugs_mini",
                 "name": "env_test",
                 "dataset": {
                     "path": "./datasets",
                     "max_samples": 20,
-                    "datasets": ["fake_news"]
+                    "datasets": ["quixbugs_mini"],
                 },
                 "model": {
-                    "name": "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
-                    "max_seq_length": 512
-                }
+                    "name": "mock_model_for_tiny_run",
+                    "max_seq_length": 512,
+                },
             },
             "evaluation": {
                 "test_samples": 5,
@@ -431,15 +430,13 @@ def test_environment_overrides():
                     "style": 0.15,
                     "security": 0.25,
                     "runtime": 0.1,
-                    "syntax": 0.2
-                }
+                    "syntax": 0.2,
+                },
             },
-            "infra": {
-                "executor": "local"
-            },
+            "infra": {"executor": "local"},
             "cache": {
                 "artifacts_dir": "./cache/env_test",
-                "base_checkpoint": "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+                "base_checkpoint": "mock_model_for_tiny_run",
             },
             "threshold": {
                 "base_thresholds": {
@@ -447,20 +444,20 @@ def test_environment_overrides():
                     "style": 0.1,
                     "security": 0.1,
                     "runtime": 0.1,
-                    "syntax": 0.1
+                    "syntax": 0.1,
                 },
                 "max_thresholds": {
                     "bugfix": 0.8,
                     "style": 0.8,
                     "security": 0.8,
                     "runtime": 0.8,
-                    "syntax": 0.8
-                }
+                    "syntax": 0.8,
+                },
             },
-            "seed": 42
+            "seed": 42,
         }
 
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as f:
             yaml.dump(config_data, f)
             temp_config_path = Path(f.name)
 

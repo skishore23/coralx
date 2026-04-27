@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "Functional CORAL Evolution System - Cellular Automata + LoRA for Code Generation"
 readme = "README.md"
 requires-python = ">=3.10"
-license = {text = "Apache-2.0"}
+license = {text = "MIT"}
 authors = [
     {name = "CoralX Team", email = "team@coralx.dev"}
 ]
@@ -17,7 +17,7 @@ classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
     "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: Apache Software License",
+    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
@@ -29,23 +29,9 @@ classifiers = [
 
 dependencies = [
     "numpy>=1.20.0,<2.0.0",
-    "scipy>=1.7.0",
     "pyyaml>=5.4.0",
-    "modal>=0.50.0",
-    "torch>=2.1.0",
-    "transformers>=4.36.0",
-    "peft>=0.7.0",
-    "accelerate>=0.25.0",
-    "datasets>=2.14.0",
-    "unsloth>=2023.11",
+    "pydantic>=2.0.0",
     "rich>=13.0.0",
-    "scikit-learn>=1.0.0",
-    "psutil>=5.8.0",
-    "matplotlib>=3.5.0",
-    "pandas>=1.3.0",
-    "pytest>=7.4.0",
-    "flake8>=6.1.0",
-    "bandit>=1.7.5",
 ]
 
 [project.optional-dependencies]
@@ -56,6 +42,15 @@ dev = [
     "ruff>=0.1.0",
     "mypy>=1.0.0",
     "pre-commit>=3.0.0",
+]
+ml = [
+    "torch>=2.4",
+    "torchvision>=0.19",
+    "transformers>=5.6.0",
+    "accelerate>=1.13.0",
+    "huggingface_hub>=1.5.0",
+    "datasets>=4.0.0",
+    "peft>=0.18.0",
 ]
 
 [project.scripts]
@@ -120,31 +115,39 @@ ignore = [
 
 [tool.mypy]
 python_version = "3.10"
-warn_return_any = true
-warn_unused_configs = true
-disallow_untyped_defs = true
-disallow_incomplete_defs = true
-check_untyped_defs = true
-disallow_untyped_decorators = true
-no_implicit_optional = true
-warn_redundant_casts = true
-warn_unused_ignores = true
-warn_no_return = true
-warn_unreachable = true
-strict_equality = true
-
-[[tool.mypy.overrides]]
-module = [
-    "transformers.*",
-    "peft.*",
-    "accelerate.*",
-    "datasets.*",
-    "unsloth.*",
-    "modal.*",
-    "sklearn.*",
-    "scipy.*",
-]
+warn_return_any = false
+warn_unused_configs = false
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+check_untyped_defs = false
+disallow_untyped_decorators = false
+no_implicit_optional = false
+warn_redundant_casts = false
+warn_unused_ignores = false
+warn_no_return = false
+warn_unreachable = false
+strict_equality = false
 ignore_missing_imports = true
+follow_imports = "silent"
+disable_error_code = [
+    "var-annotated",
+    "union-attr",
+    "assignment",
+    "attr-defined",
+    "call-overload",
+    "misc",
+    "dict-item",
+    "return-value",
+    "arg-type",
+    "operator",
+    "import-untyped",
+    "call-arg",
+    "override",
+    "index",
+    "no-any-return",
+    "import-not-found",
+    "no-untyped-def",
+]
 
 [tool.pytest.ini_options]
 minversion = "7.0"

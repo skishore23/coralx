@@ -1,6 +1,15 @@
 target-version = "py310"
-select = ["E", "W", "F", "I", "B", "C4", "UP"]
-ignore = ["E501", "B008", "C901"]
 
-[per-file-ignores]
+[lint]
+select = ["E", "W", "F", "I", "B", "C4", "UP"]
+ignore = [
+  "E501",  # line length is handled by formatting/readability review
+  "B008",  # pydantic defaults and legacy configs use call defaults
+  "B904",  # exception chaining cleanup is tracked but not a release gate
+  "C901",  # experimental evaluators are intentionally branchy
+  "UP038", # keep Python 3.10-compatible isinstance tuple style
+]
+
+[lint.per-file-ignores]
 "__init__.py" = ["F401"]
+"tests/test_m1.py" = ["E402"]

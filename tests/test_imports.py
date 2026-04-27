@@ -1,8 +1,9 @@
 """Test that all core modules can be imported without errors."""
 
-import pytest
 import sys
 from pathlib import Path
+
+import pytest
 
 # Add the project root to Python path
 project_root = Path(__file__).parent.parent
@@ -38,26 +39,26 @@ def test_config_validation():
             "output_dir": "./results",
             "selection_mode": "pareto",
             "survival_rate": 0.5,
-            "crossover_rate": 0.7
+            "crossover_rate": 0.7,
         },
         "evo": {
             "rank_candidates": [4, 8, 16],
             "alpha_candidates": [8, 16, 32],
             "dropout_candidates": [0.05, 0.1, 0.15],
-            "target_modules": ["q_proj", "v_proj"]
+            "target_modules": ["q_proj", "v_proj"],
         },
         "experiment": {
-            "target": "fakenews_tinyllama",
+            "target": "quixbugs_mini",
             "name": "test_experiment",
             "dataset": {
                 "path": "./datasets",
                 "max_samples": 100,
-                "datasets": ["fake_news"]
+                "datasets": ["quixbugs_mini"],
             },
             "model": {
-                "name": "TinyLlama/TinyLlama-1.1B-Chat-v1.0",
-                "max_seq_length": 512
-            }
+                "name": "mock_model_for_tiny_run",
+                "max_seq_length": 512,
+            },
         },
         "evaluation": {
             "test_samples": 10,
@@ -66,15 +67,13 @@ def test_config_validation():
                 "style": 0.15,
                 "security": 0.25,
                 "runtime": 0.1,
-                "syntax": 0.2
-            }
+                "syntax": 0.2,
+            },
         },
-        "infra": {
-            "executor": "local"
-        },
+        "infra": {"executor": "local"},
         "cache": {
             "artifacts_dir": "./cache",
-            "base_checkpoint": "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
+            "base_checkpoint": "mock_model_for_tiny_run",
         },
         "threshold": {
             "base_thresholds": {
@@ -82,17 +81,17 @@ def test_config_validation():
                 "style": 0.1,
                 "security": 0.1,
                 "runtime": 0.1,
-                "syntax": 0.1
+                "syntax": 0.1,
             },
             "max_thresholds": {
                 "bugfix": 0.8,
                 "style": 0.8,
                 "security": 0.8,
                 "runtime": 0.8,
-                "syntax": 0.8
-            }
+                "syntax": 0.8,
+            },
         },
-        "seed": 42
+        "seed": 42,
     }
 
     # Should not raise any exceptions
@@ -105,8 +104,9 @@ def test_config_validation():
 def test_domain_objects():
     """Test that domain objects can be created."""
     import numpy as np
-    from core.domain.genome import Genome, MultiObjectiveScores
+
     from core.domain.ca import CASeed
+    from core.domain.genome import Genome, MultiObjectiveScores
     from core.domain.mapping import LoRAConfig
 
     # Test CA seed creation
@@ -121,18 +121,14 @@ def test_domain_objects():
         alpha=16,
         dropout=0.1,
         target_modules=("q_proj", "v_proj"),
-        adapter_type="lora"
+        adapter_type="lora",
     )
     assert lora_config.r == 8
     assert lora_config.alpha == 16
 
     # Test multi-objective scores
     scores = MultiObjectiveScores(
-        bugfix=0.8,
-        style=0.6,
-        security=0.9,
-        runtime=0.7,
-        syntax=0.85
+        bugfix=0.8, style=0.6, security=0.9, runtime=0.7, syntax=0.85
     )
     assert scores.overall_fitness() > 0.0
 
@@ -142,7 +138,7 @@ def test_domain_objects():
         lora_cfg=lora_config,
         id="test_genome",
         fitness=0.75,
-        multi_scores=scores
+        multi_scores=scores,
     )
     assert genome.id == "test_genome"
     assert genome.fitness == 0.75
@@ -159,6 +155,9 @@ def test_executor_creation():
 
     assert executor.is_available is True
     assert executor.config.max_workers == 2
+    result = executor.submit(lambda value: value + 1, 41)
+    assert result.is_successful()
+    assert result.result == 42
 
     # Test context manager
     with LocalExecutor() as exec:
@@ -170,26 +169,36 @@ def test_executor_creation():
 
 def test_plugin_imports():
     """Test that plugins can be imported and initialized."""
-    from plugins.fakenews_tinyllama.plugin import MultiModalAISafetyPlugin
+    from plugins.quixbugs_mini.plugin import QuixBugsMiniPlugin
 
     # Test plugin initialization with minimal config
     plugin_config = {
-        'dataset': {
-            'dataset_path': './datasets',
-            'max_samples': 5,
-            'datasets': ['fake_news']
+        "experiment": {
+            "name": "test_experiment",
+            "target": "quixbugs_mini",
+            "dataset": {
+                "path": "./datasets",
+                "max_samples": 3,
+                "datasets": ["quixbugs_mini"],
+            },
+            "model": {
+                "name": "mock_model_for_tiny_run",
+                "max_seq_length": 512,
+            },
         },
-        'model': {
-            'model_name': 'TinyLlama/TinyLlama-1.1B-Chat-v1.0',
-            'max_seq_length': 512,
-            'simulation_mode': True  # Enable simulation for testing
+        "dataset": {
+            "dataset_path": "./datasets",
+            "max_samples": 3,
+            "datasets": ["quixbugs_mini"],
         },
-        'evaluation': {
-            'test_samples': 2
-        }
+        "model": {
+            "model_name": "mock_model_for_tiny_run",
+            "max_seq_length": 512,
+        },
+        "evaluation": {"test_samples": 2},
     }
 
-    plugin = MultiModalAISafetyPlugin(plugin_config)
+    plugin = QuixBugsMiniPlugin(plugin_config)
     assert plugin is not None
 
     # Test that plugin components can be created

@@ -1,474 +1,259 @@
-# Technical Deep Dive: Cellular Automata & Category Theory in CORAL-X
+# Technical Deep Dive
 
-**Research Context**: This document describes the theoretical foundations and implementation details of CORAL-X, an experimental system investigating evolutionary approaches to LoRA hyperparameter optimization. The techniques described here represent novel applications of established concepts from evolutionary computation, cellular automata, and category theory to the domain of neural network adapter configuration.
-
-## NEAT + Cellular Automata
-
-CORAL-X combines NEAT (NeuroEvolution of Augmenting Topologies) with cellular automata for a unique approach to LoRA optimization. While traditional NEAT evolves neural network topologies, we adapt it to evolve LoRA parameter configurations.
-
-### Why NEAT for LoRA Evolution?
-
-NEAT's key insight is that structure should evolve gradually, starting simple and complexifying over time. For LoRA adapters:
-
-- **Species Protection**: Different LoRA architectures (ranks, module targets) form species
-- **Historical Markings**: Track which parameter combinations have been successful
-- **Complexification**: Start with simple configs, gradually explore higher ranks/more modules
-- **Innovation Numbers**: Ensure genetic diversity in parameter space
-
-## The Problem with Random Initialization
-
-Most evolutionary algorithms start with random populations. For LoRA parameters, this means:
-- Random rank/alpha combinations that might be incompatible
-- No structure in the search space 
-- Poor initial diversity leads to premature convergence
-- Evolution wastes time exploring obviously bad configurations
-
-## Cellular Automata for Structured Diversity
-
-Instead of random initialization, we use cellular automata to generate structured patterns that map to LoRA parameters. This gives us diverse but meaningful starting configurations.
-
-### How CA Rules Work
-
-```python
-def generate_lora_genome(ca_rule: int, steps: int, grid_size: tuple) -> Genome:
-    # Start with random grid
-    grid = initialize_random_grid(grid_size, density=0.3)
-    
-    # Evolve according to CA rule
-    for _ in range(steps):
-        grid = apply_ca_rule(grid, ca_rule)
-    
-    # Extract meaningful features
-    features = analyze_grid_patterns(grid)
-    
-    # Map to LoRA parameters
-    return Genome(
-        heavy_genes=HeavyGenes(
-            rank=map_complexity_to_rank(features.complexity),
-            alpha=map_density_to_alpha(features.density),
-            target_modules=select_modules(features.symmetry)
-        ),
-        light_genes=LightGenes(
-            learning_rate=map_entropy_to_lr(features.entropy),
-            dropout=map_sparsity_to_dropout(features.sparsity)
-        )
-    )
-```
-
-### Why This Works
-
-1. **Structured Exploration**: CA rules create patterns with internal logic
-2. **Diversity Preservation**: Different rules produce qualitatively different patterns
-3. **Scalable**: Can generate thousands of unique configurations from rule space
-4. **Reproducible**: Same seed + rule always produces same configuration
-
-## Heavy vs Light Gene Architecture
-
-The two-stage gene system separates concerns for more efficient evolution:
+CORAL-X runs an evolutionary loop over LoRA-shaped adapter configurations. The core system is local and protocol-driven: configuration selects an experiment target, the plugin registry supplies the target-specific dataset/model/fitness implementation, and the orchestrator evaluates and reproduces genomes across generations.
 
 ```mermaid
-graph TB
-    subgraph "Heavy Genes (Structural)"
-        HR[LoRA Rank: 4-32]
-        HA[Alpha Scaling: 8-32] 
-        HM[Target Modules]
-        HD[Model Depth Changes]
-    end
-    
-    subgraph "Light Genes (Optimization)"  
-        LL[Learning Rate: 1e-5 to 1e-3]
-        LB[Batch Size: 1-16]
-        LW[Warmup Steps: 0-100]
-        LD[Dropout: 0.0-0.3]
-    end
-    
-    HR --> Training[LoRA Training]
-    HA --> Training
-    HM --> Training
-    HD --> Training
-    
-    LL --> Training
-    LB --> Training  
-    LW --> Training
-    LD --> Training
-    
-    Training --> Adapter[Trained Adapter]
+flowchart TD
+    CLI["core.cli.main"]
+    Config["CoralConfig"]
+    Registry["plugins.registry"]
+    Services["EvolutionServices"]
+    Orchestrator["EvolutionOrchestrator"]
+    Population["Initial Population"]
+    Eval["Plugin Evaluation"]
+    Thresholds["Threshold Gate"]
+    Selection["Tournament or Pareto Selection"]
+    GeneticOps["Mutation / Crossover"]
+    Artifacts["candidate_evaluations.jsonl + progress artifacts"]
+
+    CLI --> Config
+    Config --> Registry
+    Registry --> Services
+    Services --> Orchestrator
+    Orchestrator --> Population
+    Population --> Eval
+    Eval --> Thresholds
+    Thresholds --> Selection
+    Selection --> GeneticOps
+    GeneticOps --> Orchestrator
+    Eval --> Artifacts
 ```
 
-### Heavy Genes (Low Mutation Rate)
-These fundamentally change the model's capacity and architecture:
+## Configuration Model
 
-- **LoRA Rank**: Determines adapter expressiveness (4 = lightweight, 32 = high capacity)
-- **Alpha Scaling**: Controls adaptation strength vs base model preservation  
-- **Target Modules**: Which transformer layers get LoRA adapters
-- **Architecture Choices**: Model-specific structural decisions
+Configuration is loaded through `core.common.config_loader.load_config()` and validated by `core.common.config.CoralConfig`. The important sections are:
 
-Heavy genes change slowly because structural mutations are usually harmful.
+- `seed`: root seed for deterministic local population creation and service RNGs.
+- `execution`: generation count, population size, output directory, selection mode, survival rate, and crossover rate.
+- `evo`: CA ranges and LoRA candidate sets.
+- `experiment`: plugin target, dataset settings, model settings, and target-specific evaluation settings.
+- `training`: optimizer settings used by plugins that train adapters.
+- `evaluation`: objective weights and test sample counts.
+- `infra`: executor selection. The current executor type is `local`.
+- `cache`: artifact directory, base checkpoint identity, cleanup threshold, and optional run id.
+- `threshold`: per-objective threshold schedule used after evaluation.
 
-### Light Genes (High Mutation Rate)
-These tune the training dynamics without changing model structure:
+The CLI exposes two commands:
 
-- **Learning Rate**: How aggressively to update during training
-- **Batch Size**: Training efficiency vs memory usage
-- **Warmup Schedule**: Gradient scaling during initial training
-- **Dropout Rates**: Regularization strength
+- `run`: validates config, resolves the plugin, and runs evolution.
+- `prove`: runs the GSM8K LoRA target with evolution plus base, fixed-LoRA, and random-control evaluations.
 
-Light genes can mutate frequently since they're easier to recover from.
+`--dry-run` executes config loading, plugin resolution, artifact path validation, and deterministic population creation without model evaluation.
 
-### NEAT Evolution Strategy
+## Domain Model
 
-CORAL-X adapts NEAT's principles for LoRA parameter evolution:
+The central domain object is `core.domain.genome.Genome`:
+
+- `seed`: a `CASeed` containing the CA grid, rule, and number of steps.
+- `lora_cfg`: a LoRA-shaped config with rank, alpha, dropout, target modules, and adapter type.
+- `ca_features`: extracted CA features reused by plugins and cheap-knob mapping.
+- `fitness`: scalar fitness used by tournament and simple fitness selection.
+- `multi_scores`: vector fitness with `bugfix`, `style`, `security`, `runtime`, and `syntax`.
+- `run_id`: optional experiment isolation id included in heavy-gene identity.
+
+`MultiObjectiveScores.overall_fitness()` converts the five objective scores into a scalar. Pareto selection uses the vector directly; tournament selection uses the scalar.
+
+## Population Creation
+
+`core.domain.experiment.create_initial_population()` builds generation zero from config and seed. For genome index `i`, it derives a separate random state from:
+
+```text
+genome_seed = config.seed + i * 1000
+```
+
+That seed drives both Python's `Random` and NumPy's generator. Each genome receives:
+
+- an id like `gen0_genome0000`
+- a binary CA grid sampled from `evo.ca.initial_density`
+- a CA rule sampled from `evo.ca.rule_range`
+- a step count sampled from `evo.ca.steps_range`
+- CA history from `core.domain.ca.evolve()`
+- features from `core.domain.feature_extraction.extract_features()`
+- a LoRA config from `core.domain.mapping.map_features_to_lora_config()`
+
+The implementation avoids Python's salted `hash()` in evolution-critical paths. Structural identity and feature-derived entropy use `core.domain.stable_hash`.
+
+## CA Feature Extraction
+
+`extract_features()` summarizes a CA history into four values:
+
+| Feature | Implementation Signal |
+| --- | --- |
+| `complexity` | Entropy of the final grid combined with spatial complexity. Spatial complexity uses edge density, local 2x2 pattern diversity, and variance. |
+| `intensity` | Average cell-change rate across consecutive CA states. |
+| `periodicity` | Repeated grid-state hashes across short periods in the history. |
+| `convergence` | Downward slope of change rate over time. |
+
+These features are deliberately compact. They give the mapping layer enough signal to place genomes into different adapter configurations without making plugins depend on full CA histories.
+
+## Feature To Adapter Mapping
+
+`core.domain.mapping.map_features_to_lora_config()` maps CA features onto configured candidate sets:
+
+- `rank_candidates`
+- `alpha_candidates`
+- `dropout_candidates`
+- `target_modules`
+- `adapter_type`
+
+The mapping combines CA features, parameter name, diversity strength, and genome index into a stable integer fingerprint. That fingerprint indexes into each candidate set. The genome index is extra entropy, so two similar CA histories can still map to different adapter choices when the population needs diversity.
+
+Heavy genes are the structural adapter fields:
+
+```text
+rank, alpha, dropout, target_modules, adapter_type, run_id
+```
+
+Cheap knobs are runtime generation settings such as temperature, top-p, top-k, repetition penalty, and max tokens. They are mapped separately where a plugin supports them, so generation behavior can vary without changing the heavy-gene cache key.
+
+## Evolution Loop
+
+`core.application.evolution_orchestrator.EvolutionOrchestrator.run_evolution()` owns the main lifecycle:
+
+1. Validate generations, population size, executor, plugin dataset, model factory, and fitness function.
+2. Create the initial population from CA seeds.
+3. For each generation, evaluate unevaluated genomes.
+4. Apply the threshold gate to multi-objective scores.
+5. Record generation progress and candidate-level JSONL rows.
+6. Select survivors.
+7. Reproduce through mutation or crossover until the next generation reaches the configured population size.
+8. Return the final population, best genome, generation count, elapsed time, and status.
+
+Evaluation is plugin-driven. For each genome, the orchestrator calls:
+
+```text
+model = plugin.model_factory()(genome.lora_cfg, genome)
+problems = list(plugin.dataset().problems())
+scores = plugin.fitness_fn().evaluate_multi_objective(genome, model, problems, genome.ca_features)
+```
+
+If the model runner exposes `last_metrics`, the orchestrator serializes those metrics into the genome metadata and into `candidate_evaluations.jsonl`.
+
+## Threshold Gate
+
+After evaluation, `PopulationManager.apply_threshold_gate()` computes generation-specific objective thresholds and filters genomes whose multi-objective scores do not meet them. Thresholds are configured with base and max values for each objective.
+
+If filtering leaves fewer than two genomes, the manager keeps the top genomes by scalar fitness so reproduction still has enough parents. This keeps strict threshold configs from collapsing the population in early generations.
+
+## Selection
+
+CORAL-X supports three survivor selection paths:
+
+- `pareto`: NSGA-II style non-dominated sorting with crowding distance from `core.services.pareto.selection`.
+- `tournament`: seeded tournament selection over evaluated genomes.
+- fallback fitness selection: sort by scalar fitness and keep the top `k`.
+
+Pareto selection operates on `MultiObjectiveScores`. Tournament and direct fitness selection use `Genome.fitness`, which is derived from the same score vector.
+
+## Mutation And Crossover
+
+`core.services.genetic_operations.GeneticOperationsService` wraps the domain operations and records generation statistics.
+
+Mutation has two paths:
+
+- CA mutation: mutate rule, steps, or grid cells, then re-evolve the CA and remap features to LoRA.
+- LoRA mutation: change one adapter parameter directly while preserving the CA seed and features.
+
+Crossover builds a child CA seed from two parents by combining grid regions and parent CA parameters. It then evolves the hybrid CA and remaps the resulting features into a LoRA config.
+
+Both operations create generation-aware ids such as:
+
+```text
+gen1_mut_0003_4821
+gen1_cross_0001x0004_7392
+```
+
+## Structural Hashing And Cache Identity
+
+`core.domain.stable_hash` canonicalizes runtime values before hashing:
+
+- dictionaries are sorted by key
+- lists and tuples are recursively canonicalized
+- NumPy arrays include values, dtype, and shape
+- NumPy scalar values are converted to Python scalars
+- floats are rounded to 12 decimal places
+
+`infra.adapter_cache.HeavyGenes.to_hash()` hashes canonical heavy-gene data with SHA-256 and returns a shortened digest for adapter artifact paths. Equivalent structural genes produce the same cache key; changes to structural genes change the key.
+
+The GSM8K LoRA plugin has its own evaluation cache key that also includes fitness-relevant settings and dataset content, because training settings and eval slices affect candidate metrics.
+
+## Plugin Boundary
+
+Plugins implement the protocol in `core.ports.interfaces`:
 
 ```python
-def neat_evolve_population(population):
-    # 1. Species formation based on LoRA architecture similarity
-    species = form_species(population, compatibility_threshold=0.3)
-    
-    # 2. Species-level fitness sharing
-    for species in species_list:
-        shared_fitness = adjust_fitness_sharing(species)
-    
-    # 3. Reproduction within and across species
-    offspring = []
-    for species in species_list:
-        species_offspring = reproduce_species(species)
-        offspring.extend(species_offspring)
-    
-    # 4. Historical marking for innovation tracking
-    for child in offspring:
-        assign_innovation_numbers(child)
-    
-    return offspring
-
-def reproduce_species(species):
-    """NEAT reproduction with LoRA-specific crossover."""
-    if len(species) >= 2 and random() < crossover_rate:
-        # Crossover: blend compatible LoRA structures
-        parent1, parent2 = select_parents(species) 
-        child = crossover_lora_configs(parent1, parent2)
-    else:
-        # Mutation: modify existing LoRA parameters
-        parent = select_parent(species)
-        child = mutate_lora_config(parent)
-    
-    return child
+class Plugin(Protocol):
+    def dataset(self) -> DatasetProvider: ...
+    def model_factory(self) -> Callable[[LoRAConfig, Genome | None], ModelRunner]: ...
+    def fitness_fn(self) -> FitnessFn: ...
 ```
 
-### Species Formation for LoRA Configs
+The registry in `plugins/registry.py` maps `experiment.target` to one of the supported plugins. Core orchestration never imports a concrete plugin directly; service creation resolves the plugin and passes protocol implementations into `EvolutionServices`.
 
-```python
-def compatibility_distance(genome1: Genome, genome2: Genome) -> float:
-    """Calculate compatibility distance between LoRA configurations."""
-    # Structural differences (heavy genes)
-    rank_diff = abs(genome1.heavy_genes.rank - genome2.heavy_genes.rank) / 32
-    module_diff = jaccard_distance(
-        genome1.heavy_genes.target_modules, 
-        genome2.heavy_genes.target_modules
-    )
-    
-    # Optimization differences (light genes) 
-    lr_diff = abs(genome1.light_genes.learning_rate - genome2.light_genes.learning_rate)
-    dropout_diff = abs(genome1.light_genes.dropout - genome2.light_genes.dropout)
-    
-    # NEAT compatibility formula adapted for LoRA
-    c1, c2, c3 = 1.0, 1.0, 0.4  # NEAT compatibility coefficients
-    return c1 * rank_diff + c2 * module_diff + c3 * (lr_diff + dropout_diff)
-```
+This boundary keeps target-specific concerns local to plugins:
 
-## Category Theory Cache System
+- dataset loading
+- model setup
+- prompt formatting
+- adapter training
+- candidate evaluation
+- metric shaping into `MultiObjectiveScores`
 
-We use category theory to build a principled caching system that avoids redundant training while ensuring mathematical correctness.
+## Run Modes
 
-### The Basic Insight
+`quixbugs_mini` uses three tiny code-repair prompts and a mock runner. The runner returns deterministic repaired functions, and the fitness function scores bugfix, style, security, runtime, and syntax signals.
 
-LoRA adapters can be composed and reused if we preserve their mathematical relationships. Category theory provides the framework for tracking these relationships.
+`fakenews_mini` uses a small local classification set and a heuristic mock runner. It is useful for checking plugin wiring with a non-code target.
 
-```mermaid
-graph LR
-    subgraph "Category of LoRA Configs"
-        A[Config A] -->|f| B[Config B]
-        B -->|g| C[Config C]  
-        A -->|g∘f| C
-    end
-    
-    subgraph "Category of Trained Adapters"
-        TA[Adapter A] -->|F| TB[Adapter B]
-        TB -->|G| TC[Adapter C]
-        TA -->|G∘F| TC
-    end
-    
-    A -.->|Training Functor| TA
-    B -.->|Training Functor| TB
-    C -.->|Training Functor| TC
-```
+`ca_onemax` scores each genome directly from active cells in the CA grid. It removes model behavior from the loop, so it is the cleanest target for checking selection pressure.
 
-### Categorical Hash Function
+`quixbugs_gemma4` runs local Gemma 4 inference through `google/gemma-4-E2B-it`. It uses the same QuixBugs mini problems but exercises a real model runner and execution-based code checks.
 
-```python
-def categorical_hash(genome: Genome) -> str:
-    """
-    Generate hash that respects categorical structure.
-    
-    If genome1 ~= genome2 in the parameter category,
-    then hash(genome1) == hash(genome2)
-    """
-    # Heavy genes form the object identity
-    heavy_sig = (
-        genome.heavy_genes.rank,
-        genome.heavy_genes.alpha,
-        tuple(sorted(genome.heavy_genes.target_modules))
-    )
-    
-    # Light genes form morphisms (transformations)
-    light_sig = normalize_light_genes(genome.light_genes)
-    
-    # Categorical product
-    return hashlib.sha256(
-        str(heavy_sig + light_sig).encode()
-    ).hexdigest()[:16]
-```
+`gsm8k_lora` trains PEFT LoRA adapters for a local causal language model on deterministic GSM8K train/eval slices. The micro config uses `Qwen/Qwen2.5-0.5B-Instruct`; the larger math benchmark config uses `Qwen/Qwen2.5-Math-1.5B-Instruct` with boxed-answer prompting. Candidate metrics include exact answer accuracy, formatted-answer rate, train loss, eval loss, loss-derived fitness, timings, predictions, and cache source.
 
-### Functor Properties
+The first `gsm8k_math_benchmark` run completed locally on April 27, 2026. It validated the proof harness but did not validate a stronger scientific claim: the base model outscored evolved LoRA on exact accuracy, and the best random control matched the evolved exact accuracy. That result should steer future work toward better objectives, train/validation splits, and search spaces before making public performance claims.
 
-The training process is functorial - it preserves the relationships between configurations:
+## Artifacts
 
-1. **Identity**: Training the identity configuration gives the base model
-2. **Composition**: Training (config1 ∘ config2) = train(config1) ∘ train(config2)  
-3. **Associativity**: (A ∘ B) ∘ C = A ∘ (B ∘ C)
+The evolution run writes artifacts under `execution.output_dir` and cache paths under `cache.artifacts_dir`.
 
-This lets us safely reuse adapters and compose them in new contexts.
+Common artifacts include:
 
-### Cache Lookup Strategy
+- `candidate_evaluations.jsonl`: one row per evaluated genome with generation, genome id, fitness, multi-objective scores, LoRA config, CA summary, and plugin metadata.
+- `genetic_tracking/`: crossover and mutation tracking emitted by `GeneticOperationsTracker`.
+- progress data from `ProgressTracker`, including generation summaries and best-fitness history.
+- GSM8K LoRA adapter/evaluation cache entries keyed by structural config and evaluation settings.
+- `proof_report.json` from the `prove` command, including evolution, fixed-LoRA, base-model, and random-control records.
 
-```python
-def get_or_train_adapter(genome: Genome) -> LoRAAdapter:
-    # Check exact match first
-    cache_key = categorical_hash(genome)
-    if cache.exists(cache_key):
-        return cache.load(cache_key)
-    
-    # Check for compositional matches
-    for cached_genome in cache.list_compatible(genome):
-        if can_compose(cached_genome, genome):
-            base_adapter = cache.load(categorical_hash(cached_genome))
-            return compose_adapters(base_adapter, genome.light_genes)
-    
-    # No match - train from scratch
-    return train_new_adapter(genome)
-```
+## Determinism Boundaries
 
-## Multi-Objective Fitness Evaluation
+The local deterministic pieces are:
 
-We evaluate each LoRA adapter across multiple dimensions to capture real-world performance trade-offs.
+- Pydantic config validation for the same YAML input.
+- Initial CA population creation for a fixed seed and config.
+- CA feature hashing and structural cache-key generation.
+- Seeded tournament selection and local genetic operations.
 
-### Objective Design (Fake News Detection)
+Real-model inference and LoRA training can vary with hardware backend, dependency versions, model implementation details, and runtime settings. CORAL-X records candidate settings and metrics so runs can be inspected and compared at the artifact level.
 
-```python
-@dataclass
-class FakeNewsObjectives:
-    detection_accuracy: float    # Primary task performance
-    fake_news_recall: float     # Catch misinformation (critical)
-    real_news_precision: float  # Avoid false positives  
-    cross_source_robustness: float  # Generalization across sources
-    confidence_calibration: float   # Uncertainty quantification
-    efficiency_score: float     # Inference speed
+## Adding A Target
 
-def evaluate_genome(genome: Genome, dataset: Dataset) -> FakeNewsObjectives:
-    adapter = get_or_train_adapter(genome)
-    model = load_model_with_adapter(adapter)
-    
-    results = []
-    for sample in dataset.test_samples:
-        pred = model.predict(sample.text)
-        results.append({
-            'prediction': pred.label,
-            'confidence': pred.confidence,
-            'actual': sample.label,
-            'source': sample.source,
-            'inference_time': pred.timing
-        })
-    
-    return FakeNewsObjectives(
-        detection_accuracy=calculate_accuracy(results),
-        fake_news_recall=calculate_recall(results, label='fake'),
-        real_news_precision=calculate_precision(results, label='real'), 
-        cross_source_robustness=calculate_cross_source_robustness(results),
-        confidence_calibration=calculate_calibration(results),
-        efficiency_score=calculate_efficiency(results)
-    )
-```
+To add a target:
 
-### NSGA-II Selection
+1. Implement `DatasetProvider`, `ModelRunner`, `FitnessFn`, and a `Plugin`.
+2. Register the target in `plugins/registry.py`.
+3. Add a config under `config/examples/`.
+4. Keep import-time behavior lightweight, especially for model and dataset dependencies.
+5. Add tests for registry resolution, dry-run validation, deterministic population creation, and target-specific scoring.
 
-We use NSGA-II for multi-objective selection, which maintains a diverse set of non-dominated solutions rather than converging to a single optimum.
-
-```python
-def select_survivors(population: List[Genome], scores: List[Objectives]) -> List[Genome]:
-    # Calculate Pareto fronts
-    fronts = calculate_pareto_fronts(scores)
-    
-    # Calculate crowding distance within each front
-    for front in fronts:
-        distances = calculate_crowding_distance(front)
-        front.sort(key=lambda x: distances[x], reverse=True)
-    
-    # Select survivors from best fronts
-    survivors = []
-    for front in fronts:
-        if len(survivors) + len(front) <= target_size:
-            survivors.extend(front)
-        else:
-            # Fill remaining slots with most diverse from current front
-            remaining = target_size - len(survivors)
-            survivors.extend(front[:remaining])
-            break
-    
-    return survivors
-```
-
-## Training Pipeline Integration
-
-The evolution system integrates tightly with the LoRA training pipeline to ensure we're optimizing real performance, not proxy metrics.
-
-### Training Process
-
-```mermaid
-sequenceDiagram
-    participant E as Evolution Engine
-    participant C as Cache System
-    participant T as LoRA Training
-    participant M as Model Evaluation
-    
-    E->>C: Check cache for genome
-    alt Cache Hit
-        C->>E: Return cached adapter
-    else Cache Miss
-        C->>T: Start training
-        T->>T: Apply LoRA to base model
-        T->>T: Train on task dataset
-        T->>C: Save trained adapter
-        C->>E: Return new adapter
-    end
-    
-    E->>M: Evaluate adapter
-    M->>M: Run inference on test set
-    M->>M: Calculate multi-objective scores
-    M->>E: Return fitness scores
-    
-    E->>E: Update population
-```
-
-### Error Recovery
-
-Training can fail for various reasons (OOM, divergent loss, model loading issues). The system handles this gracefully:
-
-```python
-def robust_training(genome: Genome, max_retries: int = 3) -> LoRAAdapter:
-    for attempt in range(max_retries):
-        try:
-            return train_lora_adapter(genome)
-        except OutOfMemoryError:
-            # Reduce batch size and retry
-            genome = genome.with_reduced_memory_footprint()
-        except ConvergenceError:
-            # Adjust learning rate and retry  
-            genome = genome.with_conservative_training()
-        except Exception as e:
-            if attempt == max_retries - 1:
-                # Final attempt failed
-                return fallback_adapter(genome)
-            logger.warning(f"Training attempt {attempt+1} failed: {e}")
-```
-
-
-## Configuration Best Practices
-
-### Local Development
-```yaml
-execution:
-  generations: 2
-  population_size: 4
-  
-training:
-  max_steps: 50        # Quick verification
-  batch_size: 2        # Memory-friendly
-```
-
-### Production Runs
-```yaml
-execution:
-  generations: 20
-  population_size: 32
-  
-training:
-  max_steps: 1000      # Thorough training
-  batch_size: 16       # Full utilization
-```
-
-### Mac MPS Compatibility
-```yaml
-training:
-  torch_dtype: "float16"  # Not bfloat16
-  device_map: "auto"      # Let transformers handle device placement
-  max_grad_norm: 1.0      # Prevent gradient explosion
-```
-
-## Debugging Guide
-
-### Common Issues
-
-**NaN Gradients**: Usually caused by learning rate too high or missing gradient clipping
-```yaml
-training:
-  learning_rate: 1e-5   # Conservative
-  max_grad_norm: 1.0    # Essential
-```
-
-**Memory Errors**: Reduce batch size or use gradient accumulation
-```yaml 
-training:
-  batch_size: 1
-  gradient_accumulation_steps: 8  # Effective batch size = 8
-```
-
-**Poor Evolution Progress**: Check diversity and selection pressure
-```yaml
-diversity:
-  mode: "adaptive"
-  base_strength: 1.5    # Higher diversity
-
-threshold:
-  schedule: "sigmoid"   # Gradual pressure increase
-```
-
-### Performance Monitoring
-
-The system logs comprehensive metrics:
-- Training loss curves for each adapter
-- Population diversity over generations
-- Cache hit rates and training efficiency  
-- Multi-objective score distributions
-- Genetic operation statistics (crossover/mutation rates)
-
-Check `runs/{run_id}/evolution_progress.json` for real-time metrics.
-
-## Future Extensions
-
-The architecture supports several natural improvements:
-
-### Hierarchical Search
-- Coarse-grained exploration with large populations
-- Fine-grained local search around promising regions
-- Multi-scale cellular automata for different levels of abstraction
-
-### Transfer Learning
-- Warm-start evolution with adapters from related tasks
-- Cross-task knowledge transfer through categorical mappings
-- Progressive complexity increase (curriculum evolution)
-
-### Online Adaptation  
-- Real-time fitness evaluation on live data streams
-- Dynamic objective weighting based on deployment metrics
-- Continuous evolution in production environments
-
-The service-oriented architecture makes these extensions straightforward without major refactoring.
+The core should stay independent of target-specific model and dataset code; plugins own that boundary.

@@ -5,8 +5,9 @@ This module implements the Non-dominated Sorting Genetic Algorithm II (NSGA-II)
 for Pareto-optimal selection in multi-objective optimization. Used to maintain
 diversity in genome populations while optimizing multiple fitness objectives.
 """
+
 from dataclasses import dataclass
-from typing import List, Tuple
+
 from ...domain.genome import Genome, MultiObjectiveScores
 from ...domain.neat import Population
 
@@ -14,6 +15,7 @@ from ...domain.neat import Population
 @dataclass(frozen=True)
 class ParetoRank:
     """Pareto ranking information for a genome."""
+
     rank: int
     crowding_distance: float
 
@@ -38,7 +40,7 @@ def dominates(scores1: MultiObjectiveScores, scores2: MultiObjectiveScores) -> b
     return at_least_one_better and all_at_least_as_good
 
 
-def fast_non_dominated_sort(genomes: List[Genome]) -> List[List[Genome]]:
+def fast_non_dominated_sort(genomes: list[Genome]) -> list[list[Genome]]:
     """Fast non-dominated sorting algorithm from NSGA-II."""
     if not genomes:
         return []
@@ -46,7 +48,9 @@ def fast_non_dominated_sort(genomes: List[Genome]) -> List[List[Genome]]:
     # Ensure all genomes have multi-objective scores
     evaluated_genomes = [g for g in genomes if g.has_multi_scores()]
     if not evaluated_genomes:
-        raise ValueError("  No genomes with multi-objective scores for Pareto selection")
+        raise ValueError(
+            "  No genomes with multi-objective scores for Pareto selection"
+        )
 
     fronts = []
     domination_count = {}  # How many solutions dominate this one
@@ -93,11 +97,11 @@ def fast_non_dominated_sort(genomes: List[Genome]) -> List[List[Genome]]:
     return fronts
 
 
-def calculate_crowding_distance(front: List[Genome]) -> List[Tuple[Genome, float]]:
+def calculate_crowding_distance(front: list[Genome]) -> list[tuple[Genome, float]]:
     """Calculate crowding distance for genomes in a front."""
     if len(front) <= 2:
         # Boundary solutions get infinite distance
-        return [(genome, float('inf')) for genome in front]
+        return [(genome, float("inf")) for genome in front]
 
     # Initialize distances
     distances = {genome.id: 0.0 for genome in front}
@@ -111,8 +115,8 @@ def calculate_crowding_distance(front: List[Genome]) -> List[Tuple[Genome, float
         sorted_front = sorted(front, key=lambda g: g.multi_scores.to_dict()[objective])
 
         # Boundary solutions get infinite distance
-        distances[sorted_front[0].id] = float('inf')
-        distances[sorted_front[-1].id] = float('inf')
+        distances[sorted_front[0].id] = float("inf")
+        distances[sorted_front[-1].id] = float("inf")
 
         # Get objective range
         obj_values = [g.multi_scores.to_dict()[objective] for g in sorted_front]
@@ -143,7 +147,10 @@ def nsga2_select(population: Population, target_size: int) -> Population:
     front_idx = 0
 
     # Add complete fronts while possible
-    while front_idx < len(fronts) and len(selected) + len(fronts[front_idx]) <= target_size:
+    while (
+        front_idx < len(fronts)
+        and len(selected) + len(fronts[front_idx]) <= target_size
+    ):
         selected.extend(fronts[front_idx])
         front_idx += 1
 
@@ -154,7 +161,9 @@ def nsga2_select(population: Population, target_size: int) -> Population:
 
         # Calculate crowding distances and sort by them
         front_with_distances = calculate_crowding_distance(current_front)
-        front_with_distances.sort(key=lambda x: x[1], reverse=True)  # Higher crowding distance first
+        front_with_distances.sort(
+            key=lambda x: x[1], reverse=True
+        )  # Higher crowding distance first
 
         # Take the most diverse solutions
         for i in range(remaining_slots):

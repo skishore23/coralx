@@ -7,10 +7,10 @@ diversity in multi-objective evolutionary optimization.
 
 from .selection import (
     ParetoRank,
+    calculate_crowding_distance,
     dominates,
     fast_non_dominated_sort,
-    calculate_crowding_distance,
-    nsga2_select
+    nsga2_select,
 )
 
 __all__ = [
@@ -18,5 +18,5 @@ __all__ = [
     "dominates",
     "fast_non_dominated_sort",
     "calculate_crowding_distance",
-    "nsga2_select"
+    "nsga2_select",
 ]

@@ -1,11 +1,3 @@
-"""
-CORAL-X: Experimental Evolutionary LoRA Optimization Framework
-
-This is a research project exploring the application of evolutionary algorithms,
-cellular automata, and category theory to the optimization of LoRA adapter
-configurations for large language models.
-
-Note: This is experimental software under active development.
-"""
+"""CORAL-X evolutionary search over LoRA-shaped adapter configurations."""
 
 __version__ = "2.1.0-experimental"

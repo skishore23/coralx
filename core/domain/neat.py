@@ -5,18 +5,21 @@ This module implements core evolutionary operations including selection,
 mutation, and crossover for genome populations. The implementation follows
 NEAT principles while being optimized for LoRA adapter evolution.
 """
+
 from dataclasses import dataclass
-from typing import Tuple
-import numpy as np
 from random import Random
-from .genome import Genome
+
+import numpy as np
+
 from .ca import CASeed
-from .mapping import LoRAConfig, EvolutionConfig
+from .genome import Genome
+from .mapping import EvolutionConfig, LoRAConfig
+from .stable_hash import stable_int
 
 
 @dataclass(frozen=True)
 class Population:
-    genomes: Tuple[Genome, ...]
+    genomes: tuple[Genome, ...]
 
     def size(self) -> int:
         """Get population size."""
@@ -37,7 +40,7 @@ class Population:
 
         return max(evaluated, key=lambda g: g.fitness)
 
-    def sorted_by_fitness(self) -> 'Population':
+    def sorted_by_fitness(self) -> "Population":
         """Return population sorted by fitness (best first)."""
         evaluated = [g for g in self.genomes if g.is_evaluated()]
         if not evaluated:
@@ -49,7 +52,7 @@ class Population:
         sorted_genomes = sorted(evaluated, key=lambda g: g.fitness, reverse=True)
         return Population(tuple(sorted_genomes))
 
-    def with_default_fitness(self, default_fitness: float = 0.0) -> 'Population':
+    def with_default_fitness(self, default_fitness: float = 0.0) -> "Population":
         """No default fitness assignment allowed."""
         unevaluated_genomes = [g for g in self.genomes if not g.is_evaluated()]
         if unevaluated_genomes:
@@ -77,11 +80,13 @@ def select(pop: Population, k: int) -> Population:
         )
 
     sorted_pop = pop.sorted_by_fitness()
-    survivors = sorted_pop.genomes[:min(k, len(sorted_pop.genomes))]
+    survivors = sorted_pop.genomes[: min(k, len(sorted_pop.genomes))]
     return Population(survivors)
 
 
-def tournament_select(pop: Population, k: int, tournament_size: int = 3, rng: Random = None) -> Population:
+def tournament_select(
+    pop: Population, k: int, tournament_size: int = 3, rng: Random = None
+) -> Population:
     """Tournament selection for M1 deterministic evolution."""
     if k <= 0:
         return Population(())
@@ -99,25 +104,33 @@ def tournament_select(pop: Population, k: int, tournament_size: int = 3, rng: Ra
         rng = Random(42)  # Deterministic default for M1
 
     survivors = []
-    for _ in range(k):
+    available = list(evaluated)
+    target = min(k, len(available))
+    for _ in range(target):
         # Select tournament participants
-        tournament = rng.sample(evaluated, min(tournament_size, len(evaluated)))
+        tournament = rng.sample(available, min(tournament_size, len(available)))
 
         # Select winner (highest fitness)
         winner = max(tournament, key=lambda g: g.fitness)
         survivors.append(winner)
+        available = [genome for genome in available if genome is not winner]
 
     return Population(tuple(survivors))
 
 
-def mutate(genome: Genome, evo_cfg: EvolutionConfig, rng: Random, generation: int = 0,
-           diversity_strength: float = 1.0, config_dict: dict = None, run_id: str = None) -> Genome:
+def mutate(
+    genome: Genome,
+    evo_cfg: EvolutionConfig,
+    rng: Random,
+    generation: int = 0,
+    diversity_strength: float = 1.0,
+    config_dict: dict = None,
+    run_id: str = None,
+) -> Genome:
     """Return a new genome with small CA or LoRA perturbation using dynamic diversity."""
     # Create unique mutant ID with generation tracking
     mutant_number = rng.randint(1000, 9999)
     mutant_id = f"gen{generation + 1}_mut_{genome.id.split('_')[-1]}_{mutant_number}"
-
-
 
     # Decide whether to mutate CA or LoRA (70% CA, 30% LoRA for more CA exploration)
     if rng.random() < 0.7:
@@ -141,27 +154,47 @@ def mutate(genome: Genome, evo_cfg: EvolutionConfig, rng: Random, generation: in
         features = extract_features(history)
 
         # Apply dynamic diversity to LoRA mapping with genome-derived index
-        genome_index = abs(hash(genome.id)) % 1000  # Generate unique index from genome ID
-        new_lora = map_features_to_lora_config(features, config_dict, diversity_strength, genome_index)
+        genome_index = stable_int(genome.id, 1000)
+        new_lora = map_features_to_lora_config(
+            features, config_dict, diversity_strength, genome_index
+        )
 
         # Store CA features for consistency
-        return Genome(seed=new_seed, lora_cfg=new_lora, id=mutant_id, ca_features=features, run_id=run_id)
+        return Genome(
+            seed=new_seed,
+            lora_cfg=new_lora,
+            id=mutant_id,
+            ca_features=features,
+            run_id=run_id,
+        )
     else:
         # Mutate LoRA config directly (preserve CA features since CA didn't change)
         new_lora = _mutate_lora_config(genome.lora_cfg, evo_cfg, rng)
-        return Genome(seed=genome.seed, lora_cfg=new_lora, id=mutant_id, ca_features=genome.ca_features, run_id=run_id)
+        return Genome(
+            seed=genome.seed,
+            lora_cfg=new_lora,
+            id=mutant_id,
+            ca_features=genome.ca_features,
+            run_id=run_id,
+        )
 
 
-def crossover(p1: Genome, p2: Genome, evo_cfg: EvolutionConfig, rng: Random, generation: int = 0,
-              diversity_strength: float = 1.0, config_dict: dict = None, run_id: str = None) -> Genome:
+def crossover(
+    p1: Genome,
+    p2: Genome,
+    evo_cfg: EvolutionConfig,
+    rng: Random,
+    generation: int = 0,
+    diversity_strength: float = 1.0,
+    config_dict: dict = None,
+    run_id: str = None,
+) -> Genome:
     """Breed new genome from two parents using dynamic diversity."""
     # Create unique child ID with generation tracking
     child_number = rng.randint(1000, 9999)
-    p1_num = p1.id.split('_')[-1] if '_' in p1.id else p1.id[-4:]
-    p2_num = p2.id.split('_')[-1] if '_' in p2.id else p2.id[-4:]
+    p1_num = p1.id.split("_")[-1] if "_" in p1.id else p1.id[-4:]
+    p2_num = p2.id.split("_")[-1] if "_" in p2.id else p2.id[-4:]
     child_id = f"gen{generation + 1}_cross_{p1_num}x{p2_num}_{child_number}"
-
-
 
     # Create hybrid CA seed
     hybrid_seed = _crossover_ca_seeds(p1.seed, p2.seed, rng)
@@ -183,11 +216,19 @@ def crossover(p1: Genome, p2: Genome, evo_cfg: EvolutionConfig, rng: Random, gen
     features = extract_features(history)
 
     # Apply dynamic diversity to LoRA mapping with parent-derived index
-    parent_hash = abs(hash(p1.id + p2.id)) % 1000  # Generate unique index from parent IDs
-    hybrid_lora = map_features_to_lora_config(features, config_dict, diversity_strength, parent_hash)
+    parent_hash = stable_int({"parent1": p1.id, "parent2": p2.id}, 1000)
+    hybrid_lora = map_features_to_lora_config(
+        features, config_dict, diversity_strength, parent_hash
+    )
 
-    # 🔥 FIX: Store CA features for consistency
-    return Genome(seed=hybrid_seed, lora_cfg=hybrid_lora, id=child_id, ca_features=features, run_id=run_id)
+    # Store CA features so downstream plugins can reuse the mapped signal.
+    return Genome(
+        seed=hybrid_seed,
+        lora_cfg=hybrid_lora,
+        id=child_id,
+        ca_features=features,
+        run_id=run_id,
+    )
 
 
 def _mutate_ca_seed(seed: CASeed, rng: Random) -> CASeed:
@@ -199,12 +240,20 @@ def _mutate_ca_seed(seed: CASeed, rng: Random) -> CASeed:
     mask = rng.random() < mutation_rate
     if isinstance(mask, bool):
         # For scalar case
-        flip_positions = [(rng.randint(0, seed.grid.shape[0]-1),
-                          rng.randint(0, seed.grid.shape[1]-1))]
+        flip_positions = [
+            (
+                rng.randint(0, seed.grid.shape[0] - 1),
+                rng.randint(0, seed.grid.shape[1] - 1),
+            )
+        ]
     else:
         # Would need proper vectorized approach for array mask
-        flip_positions = [(rng.randint(0, seed.grid.shape[0]-1),
-                          rng.randint(0, seed.grid.shape[1]-1))]
+        flip_positions = [
+            (
+                rng.randint(0, seed.grid.shape[0] - 1),
+                rng.randint(0, seed.grid.shape[1] - 1),
+            )
+        ]
 
     for i, j in flip_positions:
         max_state = int(np.max(new_grid)) + 1
@@ -223,7 +272,9 @@ def _mutate_ca_seed(seed: CASeed, rng: Random) -> CASeed:
     return CASeed(grid=new_grid, rule=new_rule, steps=new_steps)
 
 
-def _mutate_lora_config(lora_cfg: LoRAConfig, evo_cfg: EvolutionConfig, rng: Random) -> LoRAConfig:
+def _mutate_lora_config(
+    lora_cfg: LoRAConfig, evo_cfg: EvolutionConfig, rng: Random
+) -> LoRAConfig:
     """Mutate LoRA configuration parameters."""
     # Mutate rank
     new_r = lora_cfg.r
@@ -244,7 +295,7 @@ def _mutate_lora_config(lora_cfg: LoRAConfig, evo_cfg: EvolutionConfig, rng: Ran
         r=new_r,
         alpha=new_alpha,
         dropout=new_dropout,
-        target_modules=lora_cfg.target_modules
+        target_modules=lora_cfg.target_modules,
     )
 
 
@@ -263,8 +314,9 @@ def _crossover_ca_seeds(seed1: CASeed, seed2: CASeed, rng: Random) -> CASeed:
     return CASeed(grid=grid, rule=rule, steps=steps)
 
 
-def _crossover_lora_configs(cfg1: LoRAConfig, cfg2: LoRAConfig,
-                           evo_cfg: EvolutionConfig, rng: Random) -> LoRAConfig:
+def _crossover_lora_configs(
+    cfg1: LoRAConfig, cfg2: LoRAConfig, evo_cfg: EvolutionConfig, rng: Random
+) -> LoRAConfig:
     """Crossover two LoRA configurations."""
     # Take each parameter from one parent or the other
     r = cfg1.r if rng.random() < 0.5 else cfg2.r
@@ -275,5 +327,5 @@ def _crossover_lora_configs(cfg1: LoRAConfig, cfg2: LoRAConfig,
         r=r,
         alpha=alpha,
         dropout=dropout,
-        target_modules=cfg1.target_modules  # Keep modules consistent
+        target_modules=cfg1.target_modules,  # Keep modules consistent
     )

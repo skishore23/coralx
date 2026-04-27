@@ -1,0 +1,88 @@
+# Experimental real-LoRA GSM8K micro run.
+# This downloads Qwen/Qwen2.5-0.5B-Instruct and openai/gsm8k.
+
+seed: 42
+
+execution:
+  generations: 2
+  population_size: 3
+  output_dir: ./artifacts/gsm8k_lora_micro
+  selection_mode: tournament
+  survival_rate: 0.5
+  crossover_rate: 0.0
+  run_held_out_benchmark: false
+
+evo:
+  ca:
+    grid_size: [8, 8]
+    rule_range: [30, 255]
+    steps_range: [4, 10]
+    initial_density: 0.3
+  rank_candidates: [2, 4, 8]
+  alpha_candidates: [4, 8, 16]
+  dropout_candidates: [0.0, 0.05, 0.1]
+  target_modules: ["q_proj", "v_proj"]
+
+experiment:
+  target: gsm8k_lora
+  name: gsm8k_lora_qwen05_micro
+  dataset:
+    path: ./datasets
+    datasets: ["openai/gsm8k"]
+    max_samples: 48
+  model:
+    name: Qwen/Qwen2.5-0.5B-Instruct
+    max_seq_length: 320
+  evaluation:
+    train_samples: 24
+    eval_samples: 12
+    max_train_steps: 12
+    max_new_tokens: 64
+    loss_weight: 1.0
+    device: auto
+
+training:
+  batch_size: 1
+  gradient_accumulation_steps: 1
+  epochs: 1
+  learning_rate: 2e-4
+  warmup_steps: 0
+  logging_steps: 1
+  save_steps: 10
+  max_grad_norm: 1.0
+  weight_decay: 0.0
+  adam_epsilon: 1e-8
+
+evaluation:
+  test_samples: 12
+  fitness_weights:
+    bugfix: 0.2
+    style: 0.2
+    security: 0.2
+    runtime: 0.2
+    syntax: 0.2
+  baseline_testing:
+    enabled: false
+
+infra:
+  executor: local
+
+cache:
+  artifacts_dir: ./artifacts/gsm8k_lora_micro
+  base_checkpoint: Qwen/Qwen2.5-0.5B-Instruct
+  cleanup_threshold: 10
+
+threshold:
+  base_thresholds:
+    bugfix: 0.0
+    style: 0.0
+    security: 0.0
+    runtime: 0.0
+    syntax: 0.0
+  max_thresholds:
+    bugfix: 0.0
+    style: 0.0
+    security: 0.0
+    runtime: 0.0
+    syntax: 0.0
+  schedule: linear

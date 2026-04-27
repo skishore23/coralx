@@ -1,32 +1,33 @@
 """Service factory and dependency injection for CORAL-X."""
 
-from typing import Optional
-
-from .evolution_orchestrator import EvolutionServices
-from ..services.population_manager import PopulationManager
-from ..services.genetic_operations import GeneticOperationsService
-from ..services.progress_tracker import ProgressTracker
 from ..common.config import CoralConfig
 from ..common.logging import get_logger
-from ..ports.interfaces import FitnessFn, Executor
+from ..ports.interfaces import Executor, FitnessFn, Plugin
+from ..services.genetic_operations import GeneticOperationsService
+from ..services.population_manager import PopulationManager
+from ..services.progress_tracker import ProgressTracker
+from .evolution_orchestrator import EvolutionServices
 
 
-def create_evolution_services(config: CoralConfig,
-                            fitness_fn: Optional[FitnessFn] = None,
-                            executor: Optional[Executor] = None,
-                            run_id: Optional[str] = None) -> EvolutionServices:
+def create_evolution_services(
+    config: CoralConfig,
+    fitness_fn: FitnessFn | None = None,
+    executor: Executor | None = None,
+    run_id: str | None = None,
+) -> EvolutionServices:
     """Create evolution services with dependency injection.
-    
+
     Args:
         config: CORAL-X configuration
         fitness_fn: Fitness function (optional, will create default if None)
-        executor: Executor (optional, will create default if None) 
+        executor: Executor (optional, will create default if None)
         run_id: Run identifier (optional)
-        
+
     Returns:
         EvolutionServices container with all dependencies
     """
     logger = get_logger(__name__)
+    plugin = create_plugin(config)
 
     # Create core services
     population_manager = PopulationManager(config, config.seed)
@@ -35,13 +36,15 @@ def create_evolution_services(config: CoralConfig,
 
     # Create fitness function if not provided
     if fitness_fn is None:
-        fitness_fn = create_fitness_function(config, run_id)
+        fitness_fn = plugin.fitness_fn()
 
     # Create executor if not provided
     if executor is None:
         executor = create_executor(config)
 
-    logger.info(f"Evolution services created for experiment: {config.experiment.name}, executor: {config.infra.executor}, run_id: {run_id}")
+    logger.info(
+        f"Evolution services created for experiment: {config.experiment.name}, executor: {config.infra.executor}, run_id: {run_id}"
+    )
 
     return EvolutionServices(
         population_manager=population_manager,
@@ -49,47 +52,47 @@ def create_evolution_services(config: CoralConfig,
         progress_tracker=progress_tracker,
         fitness_fn=fitness_fn,
         executor=executor,
-        config=config
+        dataset_provider=plugin.dataset(),
+        model_factory=plugin.model_factory(),
+        config=config,
     )
 
 
-def create_fitness_function(config: CoralConfig, run_id: Optional[str] = None) -> FitnessFn:
+def create_plugin(config: CoralConfig) -> Plugin:
+    """Create the configured experiment plugin."""
+    from plugins.registry import create_plugin as create_registered_plugin
+
+    return create_registered_plugin(config)
+
+
+def create_fitness_function(
+    config: CoralConfig, run_id: str | None = None
+) -> FitnessFn:
     """Create fitness function based on configuration.
-    
+
     Args:
         config: CORAL-X configuration
         run_id: Optional run identifier to pass to plugins
-        
+
     Returns:
         Fitness function implementation
     """
     logger = get_logger(__name__)
-
-    # Import the appropriate plugin/fitness function based on experiment target
-    target = config.experiment.target
-
-    if target == "fakenews_tinyllama":
-        from plugins.fakenews_tinyllama.plugin import MultiModalAISafetyFitness
-        fitness_fn = MultiModalAISafetyFitness(config)
-    elif target == "quixbugs_codellama":
-        from plugins.quixbugs_codellama.plugin import QuixBugsRealFitness
-        fitness_fn = QuixBugsRealFitness(config)
-    else:
-        # Default fitness function
-        from ..domain.fitness import DefaultFitnessFunction
-        fitness_fn = DefaultFitnessFunction(config)
-
-    logger.info(f"Fitness function created: target={target}, type={type(fitness_fn).__name__}")
+    plugin = create_plugin(config)
+    fitness_fn = plugin.fitness_fn()
+    logger.info(
+        f"Fitness function created: target={config.experiment.target}, type={type(fitness_fn).__name__}"
+    )
 
     return fitness_fn
 
 
 def create_executor(config: CoralConfig) -> Executor:
     """Create executor based on configuration.
-    
+
     Args:
         config: CORAL-X configuration
-        
+
     Returns:
         Executor implementation
     """
@@ -97,16 +100,16 @@ def create_executor(config: CoralConfig) -> Executor:
 
     executor_type = config.infra.executor
 
-    if executor_type == "modal":
-        from infra.modal_executor import ModalExecutor
-        executor = ModalExecutor("coral-x-production", config.dict())
-    elif executor_type == "local":
+    if executor_type == "local":
         from infra.executors.local import LocalExecutor
+
         executor = LocalExecutor()
     else:
         raise ValueError(f"Unknown executor type: {executor_type}")
 
-    logger.info(f"Executor created: type={executor_type}, class={type(executor).__name__}")
+    logger.info(
+        f"Executor created: type={executor_type}, class={type(executor).__name__}"
+    )
 
     return executor
 
@@ -119,18 +122,21 @@ class ServiceContainer:
         self.logger = get_logger(__name__)
 
         # Lazy-loaded services
-        self._evolution_services: Optional[EvolutionServices] = None
+        self._evolution_services: EvolutionServices | None = None
 
-    def evolution_services(self, fitness_fn: Optional[FitnessFn] = None,
-                          executor: Optional[Executor] = None,
-                          run_id: Optional[str] = None) -> EvolutionServices:
+    def evolution_services(
+        self,
+        fitness_fn: FitnessFn | None = None,
+        executor: Executor | None = None,
+        run_id: str | None = None,
+    ) -> EvolutionServices:
         """Get evolution services (lazy-loaded).
-        
+
         Args:
             fitness_fn: Override fitness function
             executor: Override executor
             run_id: Run identifier
-            
+
         Returns:
             EvolutionServices container
         """

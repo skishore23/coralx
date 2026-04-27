@@ -1,54 +1,58 @@
 """Unit tests for service layer."""
 
-import pytest
 from pathlib import Path
 
-from core.common.config import CoralConfig, ExecutionConfig, EvolutionConfig, ExperimentConfig, DatasetConfig, ModelConfig, EvaluationConfig, FitnessWeights, InfrastructureConfig, CacheConfig, ThresholdConfig, ObjectiveThresholds
-from core.services.population_manager import PopulationManager
-from core.services.genetic_operations import GeneticOperationsService
-from core.services.progress_tracker import ProgressTracker
-from core.domain.neat import Population
-from core.domain.genome import Genome
+import pytest
+
+from core.common.config import (
+    CacheConfig,
+    CoralConfig,
+    DatasetConfig,
+    EvaluationConfig,
+    EvolutionConfig,
+    ExecutionConfig,
+    ExperimentConfig,
+    FitnessWeights,
+    InfrastructureConfig,
+    ModelConfig,
+    ObjectiveThresholds,
+    ThresholdConfig,
+)
 from core.common.exceptions import EvolutionError
+from core.domain.genome import Genome
+from core.domain.neat import Population
+from core.services.genetic_operations import GeneticOperationsService
+from core.services.population_manager import PopulationManager
+from core.services.progress_tracker import ProgressTracker
 
 
 def create_test_config():
     """Create a test configuration."""
     return CoralConfig(
         execution=ExecutionConfig(
-            generations=5,
-            population_size=4,
-            output_dir=Path('./test_results')
+            generations=5, population_size=4, output_dir=Path("./test_results")
         ),
         evo=EvolutionConfig(
             rank_candidates=[4, 8],
             alpha_candidates=[8, 16],
             dropout_candidates=[0.1],
-            target_modules=['q_proj']
+            target_modules=["q_proj"],
         ),
         experiment=ExperimentConfig(
-            target='test_target',
-            name='test_experiment',
-            dataset=DatasetConfig(
-                path=Path('./test_data'),
-                datasets=['test']
-            ),
-            model=ModelConfig(name='test_model')
+            target="test_target",
+            name="test_experiment",
+            dataset=DatasetConfig(path=Path("./test_data"), datasets=["test"]),
+            model=ModelConfig(name="test_model"),
         ),
         evaluation=EvaluationConfig(
             test_samples=50,
             fitness_weights=FitnessWeights(
-                bugfix=0.2,
-                style=0.2,
-                security=0.2,
-                runtime=0.2,
-                syntax=0.2
-            )
+                bugfix=0.2, style=0.2, security=0.2, runtime=0.2, syntax=0.2
+            ),
         ),
-        infra=InfrastructureConfig(executor='local'),
+        infra=InfrastructureConfig(executor="local"),
         cache=CacheConfig(
-            artifacts_dir=Path('./test_cache'),
-            base_checkpoint='test_model'
+            artifacts_dir=Path("./test_cache"), base_checkpoint="test_model"
         ),
         threshold=ThresholdConfig(
             base_thresholds=ObjectiveThresholds(
@@ -56,15 +60,16 @@ def create_test_config():
             ),
             max_thresholds=ObjectiveThresholds(
                 bugfix=0.8, style=0.7, security=0.9, runtime=0.7, syntax=0.8
-            )
+            ),
         ),
-        seed=42
+        seed=42,
     )
 
 
 def create_test_population(size=4):
     """Create a test population."""
     import numpy as np
+
     from core.domain.ca import CASeed
     from core.domain.mapping import AdapterConfig
 
@@ -80,25 +85,26 @@ def create_test_population(size=4):
             alpha=16.0,
             dropout=0.1,
             target_modules=("q_proj", "v_proj"),
-            adapter_type="lora"
+            adapter_type="lora",
         )
 
         # Create test scores for Pareto selection
         from core.domain.genome import MultiObjectiveScores
+
         test_scores = MultiObjectiveScores(
             bugfix=0.5 + i * 0.1,
             style=0.6 + i * 0.05,
             security=0.7,
             runtime=0.8 - i * 0.1,
-            syntax=0.75
+            syntax=0.75,
         )
 
         genome = Genome(
             seed=ca_seed,
             lora_cfg=lora_cfg,
-            id=f'genome_{i}',
+            id=f"genome_{i}",
             multi_scores=test_scores,
-            run_id='test_run'
+            run_id="test_run",
         )
         genomes.append(genome)
 
@@ -130,7 +136,7 @@ class TestPopulationManager:
         """Test population validation with empty population."""
         config = create_test_config()
         manager = PopulationManager(config)
-        empty_population = Population(tuple())
+        empty_population = Population(())
 
         with pytest.raises(EvolutionError, match="Population is empty"):
             manager.validate_population(empty_population)
@@ -155,9 +161,9 @@ class TestPopulationManager:
 
         metrics = manager.calculate_diversity_metrics(population)
 
-        assert 'fitness_diversity' in metrics
-        assert 'genetic_diversity' in metrics
-        assert 'phenotype_diversity' in metrics
+        assert "fitness_diversity" in metrics
+        assert "genetic_diversity" in metrics
+        assert "phenotype_diversity" in metrics
         assert all(0.0 <= v <= 1.0 for v in metrics.values())
 
     def test_record_generation_stats(self):
@@ -170,8 +176,8 @@ class TestPopulationManager:
         manager.record_generation_stats(population)
 
         assert manager.current_generation == initial_gen + 1
-        assert len(manager.generation_history['best_fitness']) == 1
-        assert len(manager.generation_history['diversity_scores']) == 1
+        assert len(manager.generation_history["best_fitness"]) == 1
+        assert len(manager.generation_history["diversity_scores"]) == 1
 
 
 class TestGeneticOperationsService:
@@ -203,7 +209,6 @@ class TestGeneticOperationsService:
         service = GeneticOperationsService(config)
         population = create_test_population(4)
 
-        original_rate = service.crossover_rate
         service.adjust_genetic_parameters(population, 1)
 
         # Rate may have changed based on diversity
@@ -217,8 +222,24 @@ class TestGeneticOperationsService:
 
         summary = service.get_generation_summary()
 
-        assert 'message' in summary
-        assert 'No genetic operations performed yet' in summary['message']
+        assert "message" in summary
+        assert "No genetic operations performed yet" in summary["message"]
+
+    def test_reproduction_uses_cache_run_id_for_offspring(self):
+        """Offspring should stay in the configured cache namespace."""
+        config = create_test_config()
+        config.cache.run_id = "proof-run"
+        config.execution.crossover_rate = 0.0
+        service = GeneticOperationsService(config, 42)
+        survivors = Population(create_test_population(2).genomes)
+
+        next_population = service.reproduce_population(
+            survivors, target_size=4, generation=0
+        )
+
+        offspring = next_population.genomes[2:]
+        assert offspring
+        assert all(genome.run_id == "proof-run" for genome in offspring)
 
 
 class TestProgressTracker:
@@ -227,9 +248,9 @@ class TestProgressTracker:
     def test_initialization(self):
         """Test ProgressTracker initialization."""
         config = create_test_config()
-        tracker = ProgressTracker(config, 'test_run')
+        tracker = ProgressTracker(config, "test_run")
 
-        assert tracker.run_id == 'test_run'
+        assert tracker.run_id == "test_run"
         assert tracker.max_generations == config.execution.generations
         assert tracker.progress_file_path.exists()
 
@@ -239,12 +260,12 @@ class TestProgressTracker:
         tracker = ProgressTracker(config)
 
         # Should not raise exception
-        tracker.update_status('running', 'Test message')
+        tracker.update_status("running", "Test message")
 
         # Check progress file was updated
         progress_data = tracker.get_current_progress()
-        assert progress_data['status'] == 'running'
-        assert progress_data['message'] == 'Test message'
+        assert progress_data["status"] == "running"
+        assert progress_data["message"] == "Test message"
 
     def test_update_generation_progress(self):
         """Test generation progress update."""
@@ -257,8 +278,8 @@ class TestProgressTracker:
 
         # Check progress was updated
         progress_data = tracker.get_current_progress()
-        assert 'population_stats' in progress_data
-        assert 'generation_history' in progress_data
+        assert "population_stats" in progress_data
+        assert "generation_history" in progress_data
 
     def test_update_cache_stats(self):
         """Test cache stats update."""
@@ -268,10 +289,10 @@ class TestProgressTracker:
         tracker.update_cache_stats(0.8, 10, 100.5)
 
         progress_data = tracker.get_current_progress()
-        assert progress_data['cache_stats']['hit_rate'] == 0.8
-        assert progress_data['cache_stats']['total_adapters'] == 10
-        assert progress_data['cache_stats']['cache_size_mb'] == 100.5
+        assert progress_data["cache_stats"]["hit_rate"] == 0.8
+        assert progress_data["cache_stats"]["total_adapters"] == 10
+        assert progress_data["cache_stats"]["cache_size_mb"] == 100.5
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     pytest.main([__file__])

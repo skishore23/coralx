@@ -5,8 +5,9 @@ This module provides pure functional implementations of cellular automata
 evolution rules used to generate diverse initial configurations for the
 evolutionary algorithm. All functions are side-effect free.
 """
+
 from dataclasses import dataclass
-from typing import List
+
 import numpy as np
 from numpy.typing import NDArray
 
@@ -14,15 +15,17 @@ from numpy.typing import NDArray
 @dataclass(frozen=True)
 class CASeed:
     """Initial bit‑pattern or random seed."""
-    grid: NDArray[np.int_]   # shape (H, W), values 0..S‑1
-    rule: int                # e.g. rule‑30 for 2‑state CA
-    steps: int               # evolution length
+
+    grid: NDArray[np.int_]  # shape (H, W), values 0..S‑1
+    rule: int  # e.g. rule‑30 for 2‑state CA
+    steps: int  # evolution length
 
 
 @dataclass(frozen=True)
 class CAStateHistory:
     """All intermediate grids (0 … t)."""
-    history: List[NDArray[np.int_]]
+
+    history: list[NDArray[np.int_]]
 
 
 def evolve(seed: CASeed, genome_id: str = None) -> CAStateHistory:
@@ -54,7 +57,7 @@ def next_step(grid: NDArray[np.int_], rule: int) -> NDArray[np.int_]:
                 for dj in [-1, 0, 1]:
                     ni, nj = (i + di) % height, (j + dj) % width
                     if grid[ni, nj] == 1:
-                        neighbor_config |= (1 << bit_pos)
+                        neighbor_config |= 1 << bit_pos
                     bit_pos += 1
 
             # Apply rule based on neighbor configuration
@@ -66,12 +69,12 @@ def next_step(grid: NDArray[np.int_], rule: int) -> NDArray[np.int_]:
 def _apply_rule_fixed(neighbor_config: int, rule: int) -> int:
     """
     Apply CA rule using pure mathematical approach.
-    
+
     Uses rule number directly in bit-based lookup for elementary CA behavior.
     No hardcoded mappings, no fallbacks - pure functional approach.
     """
     # Count live neighbors (exclude center cell)
-    live_neighbors = bin(neighbor_config).count('1')
+    live_neighbors = bin(neighbor_config).count("1")
     center_alive = (neighbor_config >> 4) & 1
 
     # Use rule number as bit pattern for elementary CA
