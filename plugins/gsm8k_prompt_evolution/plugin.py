@@ -137,9 +137,8 @@ def _optional_ml_imports() -> dict[str, Any]:
     """Import optional ML dependencies with a clear error message."""
     try:
         import torch
-        from transformers import AutoModelForCausalLM, AutoTokenizer
-
         from datasets import load_dataset
+        from transformers import AutoModelForCausalLM, AutoTokenizer
     except Exception as exc:  # pragma: no cover - depends on optional extras
         raise RuntimeError(
             "The gsm8k_prompt_evolution target requires optional ML dependencies. "

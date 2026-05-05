@@ -96,10 +96,9 @@ def _optional_ml_imports() -> dict[str, Any]:
     """Import optional ML dependencies with a clear error message."""
     try:
         import torch
+        from datasets import load_dataset
         from peft import LoraConfig, TaskType, get_peft_model
         from transformers import AutoModelForCausalLM, AutoTokenizer
-
-        from datasets import load_dataset
     except Exception as exc:  # pragma: no cover - exercised only with missing extras
         raise RuntimeError(
             "The gsm8k_lora target requires optional ML dependencies. "
