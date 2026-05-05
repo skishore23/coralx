@@ -117,6 +117,7 @@ class DatasetConfig(BaseModel):
 
     path: Path
     dataset_path: Path | None = None
+    revision: str | None = None
     max_samples: int | None = Field(None, gt=0)
     datasets: list[str] = Field(min_length=1)
 
@@ -133,6 +134,7 @@ class ModelConfig(BaseModel):
 
     name: str
     model_name: str | None = None
+    revision: str | None = None
     max_seq_length: int = Field(default=512, gt=0, le=4096)
 
     @model_validator(mode="before")

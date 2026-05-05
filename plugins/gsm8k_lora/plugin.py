@@ -31,6 +31,8 @@ class GSM8KLoRASettings:
     """Runtime settings for the GSM8K LoRA micro benchmark."""
 
     model_name: str
+    model_revision: str
+    dataset_revision: str
     max_seq_length: int
     train_samples: int
     eval_samples: int
@@ -122,6 +124,7 @@ def _settings(config: dict[str, Any]) -> GSM8KLoRASettings:
     execution = config.get("execution", {}) or {}
     cache = config.get("cache", {}) or {}
     model = experiment.get("model", {}) or {}
+    dataset = experiment.get("dataset", {}) or {}
 
     output_dir = Path(
         str(execution.get("output_dir") or cache.get("artifacts_dir") or "./artifacts")
@@ -129,6 +132,10 @@ def _settings(config: dict[str, Any]) -> GSM8KLoRASettings:
 
     return GSM8KLoRASettings(
         model_name=str(model.get("name", "Qwen/Qwen2.5-0.5B-Instruct")),
+        model_revision=str(model.get("revision") or "main"),
+        dataset_revision=str(
+            dataset.get("revision") or evaluation.get("dataset_revision") or "main"
+        ),
         max_seq_length=int(model.get("max_seq_length", 384)),
         train_samples=int(evaluation.get("train_samples", 32)),
         eval_samples=int(evaluation.get("eval_samples", 16)),
@@ -231,7 +238,11 @@ class GSM8KLoRADataset(DatasetProvider):
         deps = _optional_ml_imports()
         load_dataset = deps["load_dataset"]
 
-        dataset = load_dataset("openai/gsm8k", "main")
+        dataset = load_dataset(
+            "openai/gsm8k",
+            "main",
+            revision=self.settings.dataset_revision,
+        )
         train_split = dataset["train"].shuffle(seed=self.settings.seed)
         eval_split = dataset["test"].shuffle(seed=self.settings.seed + 1)
 
@@ -357,6 +368,8 @@ class GSM8KLoRARunner(ModelRunner):
         payload = {
             "target": "gsm8k_lora",
             "model": self.settings.model_name,
+            "model_revision": self.settings.model_revision,
+            "dataset_revision": self.settings.dataset_revision,
             "max_seq_length": self.settings.max_seq_length,
             "train_samples": len(train_rows),
             "eval_samples": len(eval_rows),
@@ -449,11 +462,17 @@ class GSM8KLoRARunner(ModelRunner):
         self._set_torch_seed(torch)
         device = self._resolve_device(torch)
 
-        tokenizer = AutoTokenizer.from_pretrained(self.settings.model_name)
+        tokenizer = AutoTokenizer.from_pretrained(
+            self.settings.model_name,
+            revision=self.settings.model_revision,
+        )
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
 
-        model = AutoModelForCausalLM.from_pretrained(self.settings.model_name)
+        model = AutoModelForCausalLM.from_pretrained(
+            self.settings.model_name,
+            revision=self.settings.model_revision,
+        )
         model.config.pad_token_id = tokenizer.pad_token_id
 
         if self.lora_cfg.adapter_type == "lora":

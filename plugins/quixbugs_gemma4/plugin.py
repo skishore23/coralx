@@ -39,6 +39,7 @@ class QuixBugsGemma4Runner(ModelRunner):
     _processor: ClassVar[Any | None] = None
     _model: ClassVar[Any | None] = None
     _model_id: ClassVar[str | None] = None
+    _model_revision: ClassVar[str | None] = None
 
     def __init__(
         self, lora_cfg: LoRAConfig, config: dict[str, Any], genome: Genome | None = None
@@ -50,6 +51,9 @@ class QuixBugsGemma4Runner(ModelRunner):
             config.get("experiment", {})
             .get("model", {})
             .get("name", "google/gemma-4-E2B-it")
+        )
+        self.model_revision = str(
+            config.get("experiment", {}).get("model", {}).get("revision") or "main"
         )
         print(
             "QuixBugs Gemma 4 runner initialized "
@@ -139,6 +143,7 @@ class QuixBugsGemma4Runner(ModelRunner):
             self.__class__._processor is not None
             and self.__class__._model is not None
             and self.__class__._model_id == self.model_id
+            and self.__class__._model_revision == self.model_revision
         ):
             return self.__class__._processor, self.__class__._model, self._torch()
 
@@ -163,9 +168,13 @@ class QuixBugsGemma4Runner(ModelRunner):
 
         print(f"   Loading Gemma 4 model: {self.model_id}")
         start = time.time()
-        processor = AutoProcessor.from_pretrained(self.model_id)
+        processor = AutoProcessor.from_pretrained(
+            self.model_id,
+            revision=self.model_revision,
+        )
         model = AutoModelForCausalLM.from_pretrained(
             self.model_id,
+            revision=self.model_revision,
             dtype="auto",
             device_map="auto",
             attn_implementation="sdpa",
@@ -177,6 +186,7 @@ class QuixBugsGemma4Runner(ModelRunner):
         self.__class__._processor = processor
         self.__class__._model = model
         self.__class__._model_id = self.model_id
+        self.__class__._model_revision = self.model_revision
         return processor, model, torch
 
     @staticmethod

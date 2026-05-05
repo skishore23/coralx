@@ -137,6 +137,41 @@ def test_prompt_runner_cache_key_includes_render_settings(tmp_path):
     assert base_key != changed_key
 
 
+def test_prompt_cache_key_changes_with_huggingface_revisions(tmp_path):
+    """Prompt-eval cache keys should isolate model and dataset revisions."""
+    genome = PromptGenome(
+        id="candidate",
+        system_prompt="system",
+        reasoning_instruction="reason",
+        answer_format_instruction="answer",
+        verification_instruction="verify",
+        few_shot_example_ids=("reflection_1",),
+        few_shot_order=(0,),
+        temperature=0.0,
+        top_p=1.0,
+        max_new_tokens=64,
+        self_consistency_n=1,
+    )
+    rows = _rows("dev", 2)
+    reflection_rows = _rows("reflection", 2)
+    base_config = _config(tmp_path)
+    changed_model = _config(tmp_path)
+    changed_model["experiment"]["model"]["revision"] = "model-rev-a"
+    changed_dataset = _config(tmp_path)
+    changed_dataset["experiment"]["dataset"] = {"revision": "dataset-rev-a"}
+
+    base_key = GSM8KPromptRunner(base_config).cache_key(
+        genome, rows, reflection_rows, "hybrid:dev"
+    )
+
+    assert base_key != GSM8KPromptRunner(changed_model).cache_key(
+        genome, rows, reflection_rows, "hybrid:dev"
+    )
+    assert base_key != GSM8KPromptRunner(changed_dataset).cache_key(
+        genome, rows, reflection_rows, "hybrid:dev"
+    )
+
+
 @pytest.mark.parametrize(
     ("text", "expected"),
     [

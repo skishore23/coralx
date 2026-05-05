@@ -353,7 +353,7 @@ def _mean(rows: list[dict[str, Any]], key: str) -> float:
 def _comfy_api_alive(api_url: str) -> bool:
     try:
         base_url = _http_api_base_url(api_url)
-        with urllib.request.urlopen(  # nosec B310 - URL scheme validated above.
+        with urllib.request.urlopen(  # nosec B310
             f"{base_url}/system_stats", timeout=5
         ):
             return True
@@ -370,7 +370,7 @@ def _wait_for_output(
     base_url = _http_api_base_url(api_url)
     deadline = time.time() + timeout
     while time.time() < deadline:
-        with urllib.request.urlopen(  # nosec B310 - URL scheme validated above.
+        with urllib.request.urlopen(  # nosec B310
             f"{base_url}/history/{prompt_id}", timeout=20
         ) as response:
             history = json.loads(response.read().decode("utf-8"))

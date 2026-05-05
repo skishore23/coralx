@@ -73,6 +73,8 @@ class GSM8KPromptSettings:
     """Runtime settings for prompt evolution."""
 
     model_name: str
+    model_revision: str
+    dataset_revision: str
     max_seq_length: int
     reflection_samples: int
     dev_samples: int
@@ -158,6 +160,7 @@ def _settings(config: dict[str, Any]) -> GSM8KPromptSettings:
     execution = config.get("execution", {}) or {}
     cache = config.get("cache", {}) or {}
     model = experiment.get("model", {}) or {}
+    dataset = experiment.get("dataset", {}) or {}
     cheap_knobs = config.get("cheap_knobs", {}) or {}
 
     output_dir = Path(
@@ -170,6 +173,10 @@ def _settings(config: dict[str, Any]) -> GSM8KPromptSettings:
 
     return GSM8KPromptSettings(
         model_name=str(model.get("name", "Qwen/Qwen2.5-Math-1.5B-Instruct")),
+        model_revision=str(model.get("revision") or "main"),
+        dataset_revision=str(
+            dataset.get("revision") or evaluation.get("dataset_revision") or "main"
+        ),
         max_seq_length=int(model.get("max_seq_length", 768)),
         reflection_samples=int(evaluation.get("reflection_samples", 128)),
         dev_samples=int(evaluation.get("dev_samples", 128)),
@@ -258,7 +265,11 @@ class GSM8KPromptDataset(DatasetProvider):
 
     def problems(self) -> Iterable[dict[str, Any]]:
         deps = _optional_ml_imports()
-        dataset = deps["load_dataset"]("openai/gsm8k", "main")
+        dataset = deps["load_dataset"](
+            "openai/gsm8k",
+            "main",
+            revision=self.settings.dataset_revision,
+        )
         train_split = dataset["train"].shuffle(seed=self.settings.seed)
         test_split = dataset["test"].shuffle(seed=self.settings.seed + 1)
 
@@ -581,12 +592,14 @@ class GSM8KPromptRunner(ModelRunner):
                 "render": {
                     "use_chat_template": self.settings.use_chat_template,
                     "max_seq_length": self.settings.max_seq_length,
+                    "model_revision": self.settings.model_revision,
+                    "dataset_revision": self.settings.dataset_revision,
                 },
             },
             length=20,
         )
         return genome.cache_key(
-            model=self.settings.model_name,
+            model=f"{self.settings.model_name}@{self.settings.model_revision}",
             split_fingerprint=fingerprint,
             seed=self.settings.seed,
             version=PROMPT_EVAL_VERSION,
@@ -633,10 +646,16 @@ class GSM8KPromptRunner(ModelRunner):
             return
         deps = _optional_ml_imports()
         torch = deps["torch"]
-        tokenizer = deps["AutoTokenizer"].from_pretrained(self.settings.model_name)
+        tokenizer = deps["AutoTokenizer"].from_pretrained(
+            self.settings.model_name,
+            revision=self.settings.model_revision,
+        )
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
-        model = deps["AutoModelForCausalLM"].from_pretrained(self.settings.model_name)
+        model = deps["AutoModelForCausalLM"].from_pretrained(
+            self.settings.model_name,
+            revision=self.settings.model_revision,
+        )
         model.config.pad_token_id = tokenizer.pad_token_id
         device = self._resolve_device(torch)
         model.to(device)

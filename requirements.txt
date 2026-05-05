@@ -38,4 +38,4 @@ black>=22.0.0
 ruff>=0.1.0
 mypy>=1.0.0
 flake8>=6.1.0       # For style evaluation
-bandit>=1.7.5       # For security evaluation
+bandit>=1.9.4       # For security evaluation

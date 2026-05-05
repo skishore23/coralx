@@ -31,6 +31,7 @@ from plugins.gsm8k_lora.plugin import (
     _answers_match,
     _extract_final_answer,
 )
+from plugins.quixbugs_gemma4.plugin import QuixBugsGemma4Runner
 from plugins.registry import create_plugin, supported_targets
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -265,6 +266,18 @@ def test_gsm8k_cache_key_changes_when_fitness_settings_change(tmp_path):
     changed_prompt_runner = GSM8KLoRARunner(
         _tiny_lora_config(), changed_prompt_config, genome=genome
     )
+    changed_model_revision_config = yaml.safe_load(yaml.safe_dump(raw_config))
+    changed_model_revision_config["experiment"]["model"]["revision"] = "model-rev-a"
+    changed_model_revision_runner = GSM8KLoRARunner(
+        _tiny_lora_config(), changed_model_revision_config, genome=genome
+    )
+    changed_dataset_revision_config = yaml.safe_load(yaml.safe_dump(raw_config))
+    changed_dataset_revision_config["experiment"]["dataset"][
+        "revision"
+    ] = "dataset-rev-a"
+    changed_dataset_revision_runner = GSM8KLoRARunner(
+        _tiny_lora_config(), changed_dataset_revision_config, genome=genome
+    )
 
     changed_problem = _tiny_gsm8k_problem()
     changed_problem["eval"][0]["question"] = "What is 3 + 3?"
@@ -275,7 +288,25 @@ def test_gsm8k_cache_key_changes_when_fitness_settings_change(tmp_path):
         problem
     )
     assert base_runner._cache_key(problem) != changed_prompt_runner._cache_key(problem)
+    assert base_runner._cache_key(problem) != changed_model_revision_runner._cache_key(
+        problem
+    )
+    assert base_runner._cache_key(
+        problem
+    ) != changed_dataset_revision_runner._cache_key(problem)
     assert base_runner._cache_key(problem) != base_runner._cache_key(changed_problem)
+
+
+def test_quixbugs_gemma4_runner_tracks_model_revision():
+    """Gemma runner cache identity should include the configured HF revision."""
+    raw_config = _load_m1_config_dict()
+    raw_config["experiment"]["model"]["name"] = "google/gemma-4-E2B-it"
+    raw_config["experiment"]["model"]["revision"] = "gemma-rev-a"
+
+    runner = QuixBugsGemma4Runner(_tiny_lora_config(), raw_config)
+
+    assert runner.model_id == "google/gemma-4-E2B-it"
+    assert runner.model_revision == "gemma-rev-a"
 
 
 def test_gsm8k_fitness_combines_answer_accuracy_and_loss_score(monkeypatch, tmp_path):
