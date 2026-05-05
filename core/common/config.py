@@ -96,6 +96,7 @@ class ExecutionConfig(BaseModel):
 
     generations: int = Field(gt=0, le=1000)
     population_size: int = Field(gt=1, le=1000)
+    max_workers: int = Field(default=1, gt=0, le=64)
     output_dir: Path = Field(default=Path("./results"))
     selection_mode: SelectionMode = Field(default=SelectionMode.PARETO)
     survival_rate: float = Field(default=0.5, ge=0.0, le=1.0)
@@ -291,9 +292,7 @@ def _neutral_objective_dict(source: Any, context: str) -> dict[str, float]:
     }
     missing = tuple(key for key, value in values.items() if value is None)
     if missing:
-        raise ValueError(
-            f"Missing {context} objective fields: " + ", ".join(missing)
-        )
+        raise ValueError(f"Missing {context} objective fields: " + ", ".join(missing))
     return {key: float(value) for key, value in values.items()}
 
 

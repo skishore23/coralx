@@ -5,7 +5,9 @@ from pathlib import Path
 
 
 def load_sticker_module():
-    script_path = Path(__file__).resolve().parents[1] / "scripts" / "sticker_lora_comfy.py"
+    script_path = (
+        Path(__file__).resolve().parents[1] / "scripts" / "sticker_lora_comfy.py"
+    )
     spec = importlib.util.spec_from_file_location("sticker_lora_comfy", script_path)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
@@ -18,8 +20,12 @@ def test_sticker_dataset_is_deterministic(tmp_path):
     first_root = tmp_path / "first"
     second_root = tmp_path / "second"
 
-    first = module.create_sticker_dataset(first_root, count=3, token="cxsticker", seed=11)
-    second = module.create_sticker_dataset(second_root, count=3, token="cxsticker", seed=11)
+    first = module.create_sticker_dataset(
+        first_root, count=3, token="cxsticker", seed=11
+    )
+    second = module.create_sticker_dataset(
+        second_root, count=3, token="cxsticker", seed=11
+    )
 
     assert [record["sha256"] for record in first["records"]] == [
         record["sha256"] for record in second["records"]
@@ -34,7 +40,9 @@ def test_sticker_captions_include_trigger_token(tmp_path):
 
     captions = sorted((tmp_path / "10_cxsticker").glob("*.txt"))
     assert captions
-    assert all(path.read_text(encoding="utf-8").startswith("cxsticker,") for path in captions)
+    assert all(
+        path.read_text(encoding="utf-8").startswith("cxsticker,") for path in captions
+    )
 
 
 def test_workflow_uses_lora_loader_when_lora_is_set():

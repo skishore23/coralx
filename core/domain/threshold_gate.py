@@ -132,15 +132,11 @@ def filter_population_by_thresholds(
 
 def _neutral_threshold_dict(thresholds: ObjectiveThresholds) -> dict[str, float]:
     values = {
-        "task_score": _coalesce_threshold(
-            thresholds.task_score, thresholds.bugfix
-        ),
+        "task_score": _coalesce_threshold(thresholds.task_score, thresholds.bugfix),
         "quality_score": _coalesce_threshold(
             thresholds.quality_score, thresholds.style
         ),
-        "risk_score": _coalesce_threshold(
-            thresholds.risk_score, thresholds.security
-        ),
+        "risk_score": _coalesce_threshold(thresholds.risk_score, thresholds.security),
         "efficiency_score": (
             thresholds.efficiency_score
             if thresholds.efficiency_score is not None

@@ -99,19 +99,41 @@ def _draw_rocket(draw: ImageDraw.ImageDraw, fill: tuple[int, int, int]) -> None:
     body = [(256, 86), (342, 242), (286, 405), (226, 405), (170, 242)]
     _draw_sticker_border(draw, body)
     _rounded_polygon(draw, body, fill, (18, 18, 18), 10)
-    draw.ellipse((223, 176, 289, 242), fill=(180, 230, 255), outline=(18, 18, 18), width=9)
-    draw.polygon([(170, 275), (103, 350), (192, 335)], fill=(249, 132, 74), outline=(18, 18, 18))
-    draw.polygon([(342, 275), (409, 350), (320, 335)], fill=(249, 132, 74), outline=(18, 18, 18))
-    draw.polygon([(229, 405), (256, 470), (283, 405)], fill=(255, 209, 102), outline=(18, 18, 18))
+    draw.ellipse(
+        (223, 176, 289, 242), fill=(180, 230, 255), outline=(18, 18, 18), width=9
+    )
+    draw.polygon(
+        [(170, 275), (103, 350), (192, 335)], fill=(249, 132, 74), outline=(18, 18, 18)
+    )
+    draw.polygon(
+        [(342, 275), (409, 350), (320, 335)], fill=(249, 132, 74), outline=(18, 18, 18)
+    )
+    draw.polygon(
+        [(229, 405), (256, 470), (283, 405)], fill=(255, 209, 102), outline=(18, 18, 18)
+    )
 
 
 def _draw_coffee(draw: ImageDraw.ImageDraw, fill: tuple[int, int, int]) -> None:
-    draw.rounded_rectangle((145, 145, 330, 405), radius=34, fill=(255, 255, 255), outline=(18, 18, 18), width=18)
-    draw.rounded_rectangle((166, 184, 309, 380), radius=24, fill=fill, outline=(18, 18, 18), width=8)
+    draw.rounded_rectangle(
+        (145, 145, 330, 405),
+        radius=34,
+        fill=(255, 255, 255),
+        outline=(18, 18, 18),
+        width=18,
+    )
+    draw.rounded_rectangle(
+        (166, 184, 309, 380), radius=24, fill=fill, outline=(18, 18, 18), width=8
+    )
     draw.arc((300, 220, 425, 340), start=-70, end=80, fill=(18, 18, 18), width=20)
     draw.arc((318, 238, 394, 322), start=-70, end=80, fill=(255, 255, 255), width=16)
     for x_pos in (205, 256, 303):
-        draw.arc((x_pos - 16, 85, x_pos + 16, 158), start=205, end=330, fill=(18, 18, 18), width=7)
+        draw.arc(
+            (x_pos - 16, 85, x_pos + 16, 158),
+            start=205,
+            end=330,
+            fill=(18, 18, 18),
+            width=7,
+        )
 
 
 def _draw_lightning(draw: ImageDraw.ImageDraw, fill: tuple[int, int, int]) -> None:
@@ -121,34 +143,77 @@ def _draw_lightning(draw: ImageDraw.ImageDraw, fill: tuple[int, int, int]) -> No
 
 
 def _draw_camera(draw: ImageDraw.ImageDraw, fill: tuple[int, int, int]) -> None:
-    draw.rounded_rectangle((104, 164, 408, 386), radius=45, fill=(255, 255, 255), outline=(18, 18, 18), width=18)
-    draw.rounded_rectangle((138, 195, 374, 360), radius=28, fill=fill, outline=(18, 18, 18), width=8)
-    draw.ellipse((196, 195, 316, 315), fill=(245, 252, 255), outline=(18, 18, 18), width=12)
-    draw.ellipse((230, 229, 282, 281), fill=(87, 117, 144), outline=(18, 18, 18), width=6)
-    draw.rounded_rectangle((151, 130, 245, 190), radius=18, fill=(249, 199, 79), outline=(18, 18, 18), width=8)
+    draw.rounded_rectangle(
+        (104, 164, 408, 386),
+        radius=45,
+        fill=(255, 255, 255),
+        outline=(18, 18, 18),
+        width=18,
+    )
+    draw.rounded_rectangle(
+        (138, 195, 374, 360), radius=28, fill=fill, outline=(18, 18, 18), width=8
+    )
+    draw.ellipse(
+        (196, 195, 316, 315), fill=(245, 252, 255), outline=(18, 18, 18), width=12
+    )
+    draw.ellipse(
+        (230, 229, 282, 281), fill=(87, 117, 144), outline=(18, 18, 18), width=6
+    )
+    draw.rounded_rectangle(
+        (151, 130, 245, 190),
+        radius=18,
+        fill=(249, 199, 79),
+        outline=(18, 18, 18),
+        width=8,
+    )
 
 
 def _draw_board(draw: ImageDraw.ImageDraw, fill: tuple[int, int, int]) -> None:
-    draw.rounded_rectangle((106, 225, 406, 319), radius=47, fill=(255, 255, 255), outline=(18, 18, 18), width=20)
-    draw.rounded_rectangle((139, 248, 373, 296), radius=24, fill=fill, outline=(18, 18, 18), width=7)
+    draw.rounded_rectangle(
+        (106, 225, 406, 319),
+        radius=47,
+        fill=(255, 255, 255),
+        outline=(18, 18, 18),
+        width=20,
+    )
+    draw.rounded_rectangle(
+        (139, 248, 373, 296), radius=24, fill=fill, outline=(18, 18, 18), width=7
+    )
     for x_pos in (177, 335):
-        draw.ellipse((x_pos - 32, 313, x_pos + 32, 377), fill=(87, 117, 144), outline=(18, 18, 18), width=8)
+        draw.ellipse(
+            (x_pos - 32, 313, x_pos + 32, 377),
+            fill=(87, 117, 144),
+            outline=(18, 18, 18),
+            width=8,
+        )
 
 
 def _draw_planet(draw: ImageDraw.ImageDraw, fill: tuple[int, int, int]) -> None:
-    draw.ellipse((142, 130, 370, 358), fill=(255, 255, 255), outline=(18, 18, 18), width=20)
+    draw.ellipse(
+        (142, 130, 370, 358), fill=(255, 255, 255), outline=(18, 18, 18), width=20
+    )
     draw.ellipse((165, 153, 347, 335), fill=fill, outline=(18, 18, 18), width=7)
     draw.arc((70, 170, 442, 358), start=12, end=168, fill=(18, 18, 18), width=20)
     draw.arc((82, 184, 430, 344), start=12, end=168, fill=(255, 255, 255), width=9)
-    draw.ellipse((204, 201, 237, 234), fill=(255, 255, 255), outline=(18, 18, 18), width=5)
-    draw.ellipse((281, 262, 319, 300), fill=(255, 255, 255), outline=(18, 18, 18), width=5)
+    draw.ellipse(
+        (204, 201, 237, 234), fill=(255, 255, 255), outline=(18, 18, 18), width=5
+    )
+    draw.ellipse(
+        (281, 262, 319, 300), fill=(255, 255, 255), outline=(18, 18, 18), width=5
+    )
 
 
 def _draw_sneaker(draw: ImageDraw.ImageDraw, fill: tuple[int, int, int]) -> None:
     points = [(104, 315), (185, 236), (297, 269), (391, 309), (421, 364), (102, 364)]
     _draw_sticker_border(draw, points)
     _rounded_polygon(draw, points, fill, (18, 18, 18), 10)
-    draw.rounded_rectangle((123, 344, 408, 387), radius=20, fill=(255, 255, 255), outline=(18, 18, 18), width=8)
+    draw.rounded_rectangle(
+        (123, 344, 408, 387),
+        radius=20,
+        fill=(255, 255, 255),
+        outline=(18, 18, 18),
+        width=8,
+    )
     for x_pos in (230, 264, 298):
         draw.line((x_pos, 281, x_pos + 32, 312), fill=(255, 255, 255), width=8)
 
@@ -159,16 +224,34 @@ def _draw_pizza(draw: ImageDraw.ImageDraw, fill: tuple[int, int, int]) -> None:
     _rounded_polygon(draw, points, fill, (18, 18, 18), 10)
     draw.line((169, 137, 358, 174), fill=(249, 132, 74), width=28)
     for cx, cy in ((242, 204), (286, 274), (230, 331)):
-        draw.ellipse((cx - 17, cy - 17, cx + 17, cy + 17), fill=(239, 91, 91), outline=(18, 18, 18), width=4)
+        draw.ellipse(
+            (cx - 17, cy - 17, cx + 17, cy + 17),
+            fill=(239, 91, 91),
+            outline=(18, 18, 18),
+            width=4,
+        )
 
 
 def _draw_controller(draw: ImageDraw.ImageDraw, fill: tuple[int, int, int]) -> None:
-    draw.rounded_rectangle((96, 203, 416, 352), radius=58, fill=(255, 255, 255), outline=(18, 18, 18), width=18)
-    draw.rounded_rectangle((126, 226, 386, 330), radius=38, fill=fill, outline=(18, 18, 18), width=8)
+    draw.rounded_rectangle(
+        (96, 203, 416, 352),
+        radius=58,
+        fill=(255, 255, 255),
+        outline=(18, 18, 18),
+        width=18,
+    )
+    draw.rounded_rectangle(
+        (126, 226, 386, 330), radius=38, fill=fill, outline=(18, 18, 18), width=8
+    )
     draw.line((168, 280, 224, 280), fill=(18, 18, 18), width=12)
     draw.line((196, 252, 196, 308), fill=(18, 18, 18), width=12)
     for cx, cy in ((309, 264), (347, 292)):
-        draw.ellipse((cx - 15, cy - 15, cx + 15, cy + 15), fill=(255, 255, 255), outline=(18, 18, 18), width=5)
+        draw.ellipse(
+            (cx - 15, cy - 15, cx + 15, cy + 15),
+            fill=(255, 255, 255),
+            outline=(18, 18, 18),
+            width=5,
+        )
 
 
 def _draw_brush(draw: ImageDraw.ImageDraw, fill: tuple[int, int, int]) -> None:
@@ -183,7 +266,9 @@ def _draw_music(draw: ImageDraw.ImageDraw, fill: tuple[int, int, int]) -> None:
     draw.line((308, 109, 308, 338), fill=(255, 255, 255), width=42)
     draw.line((308, 109, 308, 338), fill=(18, 18, 18), width=25)
     draw.line((308, 109, 398, 145), fill=(18, 18, 18), width=25)
-    draw.ellipse((165, 308, 281, 412), fill=(255, 255, 255), outline=(18, 18, 18), width=20)
+    draw.ellipse(
+        (165, 308, 281, 412), fill=(255, 255, 255), outline=(18, 18, 18), width=20
+    )
     draw.ellipse((190, 327, 264, 394), fill=fill, outline=(18, 18, 18), width=7)
 
 
@@ -191,7 +276,9 @@ def _draw_sun(draw: ImageDraw.ImageDraw, fill: tuple[int, int, int]) -> None:
     points = _star_points(256, 256, 183, 130, n=12)
     _draw_sticker_border(draw, points)
     _rounded_polygon(draw, points, fill, (18, 18, 18), 9)
-    draw.ellipse((164, 164, 348, 348), fill=(255, 247, 130), outline=(18, 18, 18), width=9)
+    draw.ellipse(
+        (164, 164, 348, 348), fill=(255, 247, 130), outline=(18, 18, 18), width=9
+    )
 
 
 DRAWERS: dict[str, Callable[[ImageDraw.ImageDraw, tuple[int, int, int]], None]] = {
@@ -236,7 +323,9 @@ def create_sticker_dataset(
     for idx in range(count):
         subject = SUBJECTS[idx % len(SUBJECTS)]
         fill = FILL_COLORS[(idx + rng.randrange(len(FILL_COLORS))) % len(FILL_COLORS)]
-        bg = PALE_BACKGROUNDS[(idx + rng.randrange(len(PALE_BACKGROUNDS))) % len(PALE_BACKGROUNDS)]
+        bg = PALE_BACKGROUNDS[
+            (idx + rng.randrange(len(PALE_BACKGROUNDS))) % len(PALE_BACKGROUNDS)
+        ]
         image = Image.new("RGB", (512, 512), bg)
         draw = ImageDraw.Draw(image)
         DRAWERS[subject](draw, fill)
@@ -400,7 +489,11 @@ def list_model_files(path: Path) -> list[str]:
     if not path.exists():
         return []
     suffixes = {".safetensors", ".ckpt", ".pt"}
-    return sorted(str(file.relative_to(path)) for file in path.rglob("*") if file.suffix in suffixes)
+    return sorted(
+        str(file.relative_to(path))
+        for file in path.rglob("*")
+        if file.suffix in suffixes
+    )
 
 
 def find_trainer_script() -> str | None:
@@ -423,7 +516,9 @@ def find_trainer_script() -> str | None:
 
 def check_api(api_url: str, timeout: float = 1.5) -> bool:
     try:
-        with urllib.request.urlopen(f"{api_url.rstrip('/')}/system_stats", timeout=timeout) as response:
+        with urllib.request.urlopen(
+            f"{api_url.rstrip('/')}/system_stats", timeout=timeout
+        ) as response:
             return response.status == 200
     except (urllib.error.URLError, TimeoutError):
         return False
@@ -454,7 +549,9 @@ def readiness_report(
         "dataset_image_count": len(images),
         "dataset_caption_count": len(captions),
         "ready_for_comfy_generation": bool(comfy_root and checkpoints),
-        "ready_for_training": bool(checkpoints and find_trainer_script() and images and captions),
+        "ready_for_training": bool(
+            checkpoints and find_trainer_script() and images and captions
+        ),
     }
 
 
@@ -557,7 +654,9 @@ def cmd_workflow(args: argparse.Namespace) -> None:
         token=args.token,
         lora_name=args.lora,
     )
-    print(json.dumps({"workflow": str(args.output), "nodes": sorted(workflow)}, indent=2))
+    print(
+        json.dumps({"workflow": str(args.output), "nodes": sorted(workflow)}, indent=2)
+    )
 
 
 def cmd_setup(args: argparse.Namespace) -> None:
@@ -618,7 +717,9 @@ def build_parser() -> argparse.ArgumentParser:
     check.add_argument("--dataset-root", type=Path, default=DEFAULT_DATASET_ROOT)
     check.set_defaults(func=cmd_check)
 
-    dataset = subparsers.add_parser("dataset", help="Create the sticker training dataset")
+    dataset = subparsers.add_parser(
+        "dataset", help="Create the sticker training dataset"
+    )
     dataset.add_argument("--output", type=Path, default=DEFAULT_DATASET_ROOT)
     dataset.add_argument("--count", type=int, default=24)
     dataset.add_argument("--token", default=DEFAULT_TOKEN)
@@ -627,13 +728,19 @@ def build_parser() -> argparse.ArgumentParser:
     dataset.set_defaults(func=cmd_dataset)
 
     workflow = subparsers.add_parser("workflow", help="Write a ComfyUI API workflow")
-    workflow.add_argument("--output", type=Path, default=DEFAULT_ARTIFACT_ROOT / "workflow_sticker_lora_api.json")
+    workflow.add_argument(
+        "--output",
+        type=Path,
+        default=DEFAULT_ARTIFACT_ROOT / "workflow_sticker_lora_api.json",
+    )
     workflow.add_argument("--checkpoint", default=DEFAULT_CHECKPOINT)
     workflow.add_argument("--token", default=DEFAULT_TOKEN)
     workflow.add_argument("--lora", default=None)
     workflow.set_defaults(func=cmd_workflow)
 
-    setup = subparsers.add_parser("setup", help="Create dataset, workflow, and readiness report")
+    setup = subparsers.add_parser(
+        "setup", help="Create dataset, workflow, and readiness report"
+    )
     setup.add_argument("--comfy-root", type=Path, default=None)
     setup.add_argument("--api-url", default=DEFAULT_API_URL)
     setup.add_argument("--dataset-root", type=Path, default=DEFAULT_DATASET_ROOT)
@@ -646,11 +753,17 @@ def build_parser() -> argparse.ArgumentParser:
     setup.add_argument("--overwrite", action="store_true")
     setup.set_defaults(func=cmd_setup)
 
-    train_command = subparsers.add_parser("train-command", help="Print a minimal sd-scripts training command")
+    train_command = subparsers.add_parser(
+        "train-command", help="Print a minimal sd-scripts training command"
+    )
     train_command.add_argument("--trainer-script", default=None)
     train_command.add_argument("--checkpoint-path", required=True)
-    train_command.add_argument("--dataset-root", type=Path, default=DEFAULT_DATASET_ROOT)
-    train_command.add_argument("--artifact-root", type=Path, default=DEFAULT_ARTIFACT_ROOT)
+    train_command.add_argument(
+        "--dataset-root", type=Path, default=DEFAULT_DATASET_ROOT
+    )
+    train_command.add_argument(
+        "--artifact-root", type=Path, default=DEFAULT_ARTIFACT_ROOT
+    )
     train_command.add_argument("--output-name", default="cxsticker_v1")
     train_command.set_defaults(func=cmd_train_command)
 

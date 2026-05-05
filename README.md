@@ -99,6 +99,10 @@ see `docs/coralx_architecture_and_purpose.md`.
 For detailed CA, NEAT-style reproduction, selection, mutation, crossover, and
 sticker evolution mechanics, see `docs/evolution_mechanics.md`.
 
+For future coding-agent work, see `AGENTS.md`. New durable targets should be
+implemented through the CORAL-X config, registry, plugin, orchestrator, and CLI
+path rather than as script-only integrations.
+
 ```mermaid
 graph TB
     Config["Config"]

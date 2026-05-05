@@ -12,6 +12,7 @@ import pytest
 import yaml
 
 from core.cli.proof import (
+    _aggregate_gsm8k_lora_seed_reports,
     _best_evolution_candidate_by_exact_accuracy,
     _proof_quality_summary,
     _proof_seed_configs,
@@ -35,6 +36,7 @@ from plugins.registry import create_plugin, supported_targets
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 M1_CONFIG = PROJECT_ROOT / "config" / "examples" / "m1_tiny.yaml"
 GSM8K_CONFIG = PROJECT_ROOT / "config" / "examples" / "gsm8k_lora_micro.yaml"
+STICKER_CONFIG = PROJECT_ROOT / "config" / "examples" / "sticker_lora_comfy_smoke.yaml"
 
 
 def _load_m1_config_dict() -> dict:
@@ -122,8 +124,8 @@ def test_sticker_lora_comfy_plugin_exposes_dataset_without_comfy_runtime():
     assert problem["test_subjects"]
 
 
-def test_sticker_lora_comfy_plugin_evaluates_via_script_mechanics(monkeypatch):
-    """The sticker plugin should adapt core genomes into script-backed evaluations."""
+def test_sticker_lora_comfy_plugin_evaluates_via_runner_boundary(monkeypatch):
+    """The sticker plugin should use its Comfy runner as the integration boundary."""
     raw_config = _load_m1_config_dict()
     raw_config["experiment"]["target"] = "sticker_lora_comfy"
     raw_config["experiment"]["name"] = "sticker_lora_comfy"
@@ -139,13 +141,14 @@ def test_sticker_lora_comfy_plugin_evaluates_via_script_mechanics(monkeypatch):
     fitness = plugin.fitness_fn()
     problem = next(iter(plugin.dataset().problems()))
     genome = _tiny_genome()
+    model = plugin.model_factory()(genome.lora_cfg, genome)
 
-    def fake_evaluate_candidate(candidate, subjects, api_url, output_dir, prompt_timeout):
+    def fake_evaluate_candidate(self, candidate, subjects):
         assert candidate.candidate_id == genome.id
         assert subjects == problem["dev_subjects"][:2]
-        assert api_url == "http://comfy.test"
-        assert output_dir == config.execution.output_dir
-        assert prompt_timeout == 12.0
+        assert self.settings.api_url == "http://comfy.test"
+        assert self.settings.output_dir == config.execution.output_dir
+        assert self.settings.prompt_timeout == 12.0
         return {
             "score": 0.75,
             "subjects": [
@@ -160,15 +163,55 @@ def test_sticker_lora_comfy_plugin_evaluates_via_script_mechanics(monkeypatch):
             ],
         }
 
-    import plugins.sticker_lora_comfy.plugin as sticker_plugin
+    monkeypatch.setattr(
+        type(model),
+        "evaluate_candidate",
+        fake_evaluate_candidate,
+    )
 
-    monkeypatch.setattr(sticker_plugin.sticker_evolve, "evaluate_candidate", fake_evaluate_candidate)
-
-    scores = fitness.evaluate_multi_objective(genome, None, [problem])
+    scores = fitness.evaluate_multi_objective(genome, model, [problem])
 
     assert scores.task_score == 0.75
     assert scores.risk_score == 0.8
     assert scores.validity_score == 0.9
+
+
+def test_sticker_lora_comfy_runner_validates_workflow_before_runtime():
+    """The first-class runner should fail clearly before posting invalid Comfy jobs."""
+    from plugins.sticker_lora_comfy.plugin import StickerLoRAComfyRunner
+
+    raw_config = _load_m1_config_dict()
+    raw_config["experiment"]["target"] = "sticker_lora_comfy"
+    raw_config["experiment"]["name"] = "sticker_lora_comfy"
+    raw_config["experiment"]["dataset"]["datasets"] = ["toy"]
+    raw_config["experiment"]["evaluation"] = {
+        "split": "dev",
+        "subjects": 1,
+        "workflow_path": "/tmp/does-not-exist-coralx-workflow.json",
+        "require_api": False,
+    }
+    config = CoralConfig.model_validate(raw_config)
+    plugin = create_plugin(config)
+    genome = _tiny_genome()
+    model = plugin.model_factory()(genome.lora_cfg, genome)
+
+    assert isinstance(model, StickerLoRAComfyRunner)
+    with pytest.raises(RuntimeError, match="workflow is missing"):
+        model.validate_runtime()
+
+
+def test_sticker_lora_comfy_documented_config_dry_runs_without_comfy(tmp_path):
+    """The first-class Comfy target should validate through core without a live API."""
+    from core.cli.main import _run_dry_validation
+
+    raw_config = yaml.safe_load(STICKER_CONFIG.read_text())
+    raw_config["execution"]["output_dir"] = str(tmp_path / "output")
+    raw_config["cache"]["artifacts_dir"] = str(tmp_path / "cache")
+    config = CoralConfig.model_validate(raw_config)
+
+    _run_dry_validation(config)
+
+    assert config.experiment.target == "sticker_lora_comfy"
 
 
 def test_gsm8k_lora_plugin_is_import_safe_without_ml_downloads():
@@ -241,6 +284,13 @@ def test_gsm8k_fitness_combines_answer_accuracy_and_loss_score(monkeypatch, tmp_
     raw_config["execution"]["output_dir"] = str(tmp_path / "output")
     raw_config["cache"]["artifacts_dir"] = str(tmp_path / "cache")
     raw_config["experiment"]["evaluation"]["loss_weight"] = 0.25
+    raw_config["evaluation"]["fitness_weights"] = {
+        "task_score": 0.75,
+        "quality_score": 0.0,
+        "risk_score": 0.0,
+        "efficiency_score": 0.25,
+        "validity_score": 0.0,
+    }
 
     genome = _tiny_genome()
     problem = _tiny_gsm8k_problem()
@@ -265,12 +315,16 @@ def test_gsm8k_fitness_combines_answer_accuracy_and_loss_score(monkeypatch, tmp_
     scores = GSM8KLoRAFitness().evaluate_multi_objective(genome, runner, [problem])
     expected = 0.5 * 0.75 + 0.9 * 0.25
 
-    assert scores.bugfix == expected
-    assert scores.style == expected
-    assert scores.security == expected
-    assert scores.runtime == expected
-    assert scores.syntax == expected
-    assert math.isclose(scores.overall_fitness(), expected)
+    assert scores.task_score == 0.5
+    assert scores.quality_score == 1.0
+    assert scores.risk_score == 1.0
+    assert scores.efficiency_score == 0.9
+    assert scores.validity_score == 1.0
+    config = CoralConfig.model_validate(raw_config)
+    assert math.isclose(
+        scores.overall_fitness(config.evaluation.fitness_weights.to_dict()),
+        expected,
+    )
 
 
 def test_proof_exact_candidate_scan_ignores_previous_runs(tmp_path):
@@ -344,6 +398,71 @@ def test_proof_quality_summary_uses_no_experimental_serious_categories():
     assert summary["has_multi_seed_support"] is True
 
 
+def test_gsm8k_aggregate_proof_report_matches_cli_summary_contract():
+    """Aggregate GSM8K reports should expose the fields the CLI summary reads."""
+    raw_config = _load_gsm8k_config_dict()
+    config = CoralConfig.model_validate(raw_config)
+
+    def candidate(candidate_id, fitness, exact_accuracy):
+        return {
+            "candidate_id": candidate_id,
+            "genome_id": candidate_id,
+            "fitness": fitness,
+            "lora": {"r": 2, "alpha": 4, "dropout": 0.0, "target_modules": []},
+            "metrics": {"exact_accuracy": exact_accuracy, "loss_score": fitness},
+        }
+
+    seed_reports = []
+    for seed, exact_accuracy in [(101, 0.7), (103, 0.8), (107, 0.9)]:
+        evolved = {
+            "genome_id": f"evolved_{seed}",
+            "fitness": 0.8,
+            "lora": {"r": 2, "alpha": 4, "dropout": 0.0, "target_modules": []},
+            "metadata": {
+                "evaluation": {
+                    "exact_accuracy": exact_accuracy,
+                    "loss_score": 0.8,
+                }
+            },
+        }
+        seed_reports.append(
+            {
+                "seeds": [seed],
+                "evolution": {
+                    "best": evolved,
+                    "best_by_fitness": evolved,
+                    "best_by_exact_accuracy": candidate(
+                        f"exact_{seed}", 0.75, exact_accuracy
+                    ),
+                },
+                "base_model_baseline": candidate(f"base_{seed}", 0.4, 0.3),
+                "fixed_baseline": candidate(f"fixed_{seed}", 0.5, 0.4),
+                "random_baseline": {
+                    "best": candidate(f"random_{seed}", 0.6, 0.5),
+                    "trials": [candidate(f"random_{seed}", 0.6, 0.5)],
+                },
+                "held_out": candidate(f"held_out_{seed}", 0.7, 0.65),
+                "artifacts": {"proof_report": f"seed_{seed}/proof_report.json"},
+            }
+        )
+
+    report = _aggregate_gsm8k_lora_seed_reports(config, seed_reports, started_at=0.0)
+
+    assert report["evolution"]["best_by_fitness"]["fitness"] == pytest.approx(0.8)
+    assert (
+        report["evolution"]["best_by_exact_accuracy"]["genome_id"]
+        == "evolution_best_exact_mean"
+    )
+    assert report["evolution"]["best_by_exact_accuracy"]["metrics"][
+        "exact_accuracy"
+    ] == pytest.approx(0.8)
+    assert report["interpretation"]["exact_accuracy"][
+        "evolution_best"
+    ] == pytest.approx(0.8)
+    assert report["interpretation"]["evolution_minus_random_best"] == pytest.approx(0.2)
+    assert report["proof_quality"]["has_multi_seed_support"] is True
+
+
 def test_proof_execution_policy_requires_held_out_and_three_seeds(tmp_path):
     """Framework proof mode should require held-out execution and multiple seeds."""
     raw_config = _load_gsm8k_config_dict()
@@ -381,9 +500,7 @@ def test_documented_proof_configs_satisfy_execution_policy():
     proof_configs = [
         PROJECT_ROOT / "config" / "examples" / "gsm8k_lora_micro.yaml",
         PROJECT_ROOT / "config" / "examples" / "gsm8k_math_benchmark.yaml",
-        *sorted(
-            (PROJECT_ROOT / "config" / "examples").glob("gsm8k_prompt_*.yaml")
-        ),
+        *sorted((PROJECT_ROOT / "config" / "examples").glob("gsm8k_prompt_*.yaml")),
     ]
 
     for config_path in proof_configs:

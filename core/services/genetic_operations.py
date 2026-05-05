@@ -119,9 +119,7 @@ class GeneticOperationsService(LoggingMixin):
 
         return result_population
 
-    def _perform_crossover(
-        self, population: Population, generation: int
-    ) -> Genome:
+    def _perform_crossover(self, population: Population, generation: int) -> Genome:
         """Perform crossover between two randomly selected parents.
 
         Args:
@@ -175,9 +173,7 @@ class GeneticOperationsService(LoggingMixin):
                 f"FAIL-FAST: crossover failed in generation {generation}: {e}"
             ) from e
 
-    def _perform_mutation(
-        self, population: Population, generation: int
-    ) -> Genome:
+    def _perform_mutation(self, population: Population, generation: int) -> Genome:
         """Perform mutation on a randomly selected parent.
 
         Args:

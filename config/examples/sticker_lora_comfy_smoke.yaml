@@ -1,0 +1,90 @@
+# First-class ComfyUI sticker inference smoke target.
+# Uses already-trained LoRAs visible to ComfyUI; it does not train LoRA weights.
+
+seed: 505
+
+execution:
+  generations: 1
+  population_size: 2
+  max_workers: 1
+  output_dir: ./artifacts/sticker_lora_comfy/core_smoke
+  selection_mode: tournament
+  survival_rate: 0.5
+  crossover_rate: 0.0
+  run_held_out_benchmark: false
+
+evo:
+  ca:
+    grid_size: [8, 8]
+    rule_range: [30, 255]
+    steps_range: [4, 10]
+    initial_density: 0.4
+  rank_candidates: [4, 8, 16]
+  alpha_candidates: [8, 16, 32]
+  dropout_candidates: [0.0, 0.05, 0.1]
+  target_modules: ["comfy_inference"]
+
+experiment:
+  target: sticker_lora_comfy
+  name: sticker_lora_comfy_core_smoke
+  dataset:
+    path: ./datasets
+    datasets: ["toy"]
+    max_samples: 2
+  model:
+    name: comfyui_sd15_sticker_lora
+    max_seq_length: 128
+  evaluation:
+    split: dev
+    subjects: 2
+    api_url: http://127.0.0.1:8188
+    workflow_path: ./artifacts/sticker_lora_comfy/workflow_sticker_lora_api.json
+    comfy_output_dir: ./artifacts/sticker_lora_comfy/ComfyUI_clean/output
+    prompt_timeout: 600
+    require_api: true
+
+training:
+  batch_size: 1
+  gradient_accumulation_steps: 1
+  epochs: 1
+  learning_rate: 1e-4
+  warmup_steps: 0
+  logging_steps: 1
+  save_steps: 10
+  max_grad_norm: 1.0
+  weight_decay: 0.0
+  adam_epsilon: 1e-8
+
+evaluation:
+  test_samples: 2
+  fitness_weights:
+    task_score: 0.4
+    quality_score: 0.25
+    risk_score: 0.15
+    efficiency_score: 0.1
+    validity_score: 0.1
+  baseline_testing:
+    enabled: false
+
+infra:
+  executor: local
+
+cache:
+  artifacts_dir: ./artifacts/sticker_lora_comfy/core_smoke
+  base_checkpoint: comfyui_sd15_sticker_lora
+  cleanup_threshold: 10
+
+threshold:
+  base_thresholds:
+    task_score: 0.0
+    quality_score: 0.0
+    risk_score: 0.0
+    efficiency_score: 0.0
+    validity_score: 0.0
+  max_thresholds:
+    task_score: 0.0
+    quality_score: 0.0
+    risk_score: 0.0
+    efficiency_score: 0.0
+    validity_score: 0.0
+  schedule: linear

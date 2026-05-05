@@ -74,13 +74,13 @@ class PromptGenome:
         """Return a stable key for deduplicating equivalent prompt genomes."""
         return stable_digest(self.prompt_payload(), length=20)
 
-    def with_generation(self, generation: int, origin: str, genome_id: str) -> PromptGenome:
+    def with_generation(
+        self, generation: int, origin: str, genome_id: str
+    ) -> PromptGenome:
         """Return a copy with lineage fields updated."""
         return replace(self, generation=generation, origin=origin, id=genome_id)
 
-    def with_result(
-        self, fitness: float, metrics: dict[str, Any]
-    ) -> PromptGenome:
+    def with_result(self, fitness: float, metrics: dict[str, Any]) -> PromptGenome:
         """Return a copy with evaluation result attached."""
         return replace(self, fitness=fitness, metrics=metrics)
 

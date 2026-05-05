@@ -179,7 +179,9 @@ def triangular_score(value: float, target: float, width: float) -> float:
     return clamp(1.0 - abs(value - target) / width)
 
 
-def connected_components(mask: list[bool], width: int, height: int, min_size: int) -> list[list[int]]:
+def connected_components(
+    mask: list[bool], width: int, height: int, min_size: int
+) -> list[list[int]]:
     """Return foreground connected components from a flat boolean mask."""
     seen = [False] * len(mask)
     components = []
@@ -242,19 +244,30 @@ def image_proxy_metrics(path: Path) -> dict[str, float]:
                 border.append(pixels[index])
     border_mean_raw = sum(border) / len(border)
     border_mean = border_mean_raw / 255.0
-    border_std = (sum((v / 255.0 - border_mean) ** 2 for v in border) / len(border)) ** 0.5
+    border_std = (
+        sum((v / 255.0 - border_mean) ** 2 for v in border) / len(border)
+    ) ** 0.5
 
     edge = gray.filter(ImageFilter.FIND_EDGES)
     edge_pixels = list(edge.getdata())
     edge_mean = ImageStat.Stat(edge).mean[0] / 255.0
-    border_edge_mean = sum(edge_pixels[index] for index in border_indices) / len(border_indices) / 255.0
+    border_edge_mean = (
+        sum(edge_pixels[index] for index in border_indices)
+        / len(border_indices)
+        / 255.0
+    )
     border_rgb_mean = tuple(
-        sum(rgb_pixels[index][channel] for index in border_indices) / len(border_indices) / 255.0
+        sum(rgb_pixels[index][channel] for index in border_indices)
+        / len(border_indices)
+        / 255.0
         for channel in range(3)
     )
     border_color_std = (
         sum(
-            sum((rgb_pixels[index][channel] / 255.0 - border_rgb_mean[channel]) ** 2 for channel in range(3))
+            sum(
+                (rgb_pixels[index][channel] / 255.0 - border_rgb_mean[channel]) ** 2
+                for channel in range(3)
+            )
             / 3.0
             for index in border_indices
         )
@@ -265,7 +278,9 @@ def image_proxy_metrics(path: Path) -> dict[str, float]:
     smoothness_score = clamp(1.0 - border_std / 0.08)
     border_edge_score = clamp(1.0 - border_edge_mean / 0.08)
     color_plainness_score = clamp(1.0 - border_color_std / 0.08)
-    background_score = whiteness_score * smoothness_score * border_edge_score * color_plainness_score
+    background_score = (
+        whiteness_score * smoothness_score * border_edge_score * color_plainness_score
+    )
     border_texture_penalty = max(
         clamp((border_std - 0.08) / 0.12),
         clamp((border_edge_mean - 0.08) / 0.08),
@@ -279,12 +294,16 @@ def image_proxy_metrics(path: Path) -> dict[str, float]:
     edge_score = triangular_score(edge_mean, target=0.075, width=0.070)
     clutter_penalty = clamp((edge_mean - 0.16) / 0.14)
 
-    foreground_mask = [abs(value - border_mean_raw) > 34 or value < 80 for value in pixels]
+    foreground_mask = [
+        abs(value - border_mean_raw) > 34 or value < 80 for value in pixels
+    ]
     mask_image = Image.new("L", (width, height))
     mask_image.putdata([255 if value else 0 for value in foreground_mask])
     dilated_mask = mask_image.filter(ImageFilter.MaxFilter(15))
     component_mask = [value > 0 for value in dilated_mask.getdata()]
-    components = connected_components(component_mask, width, height, min_size=int(width * height * 0.004))
+    components = connected_components(
+        component_mask, width, height, min_size=int(width * height * 0.004)
+    )
 
     if components:
         largest_component = max(components, key=len)
@@ -293,27 +312,43 @@ def image_proxy_metrics(path: Path) -> dict[str, float]:
         ys = [index // width for index in largest_component]
         total_component_area = sum(len(component) for component in components)
         area_fraction = len(largest_component) / (width * height)
-        component_dominance = len(largest_component) / total_component_area if total_component_area else 0.0
+        component_dominance = (
+            len(largest_component) / total_component_area
+            if total_component_area
+            else 0.0
+        )
         component_count = len(components)
         center_x = (min(xs) + max(xs)) / 2 / width
         center_y = (min(ys) + max(ys)) / 2 / height
-        center_score = triangular_score(center_x, 0.5, 0.25) * triangular_score(center_y, 0.5, 0.25)
+        center_score = triangular_score(center_x, 0.5, 0.25) * triangular_score(
+            center_y, 0.5, 0.25
+        )
         area_score = triangular_score(area_fraction, 0.36, 0.30)
 
-        repeated_object_penalty = clamp((component_count - 1) / 4.0) * clamp(1.0 - component_dominance)
-        single_object_score = clamp((component_dominance - 0.62) / 0.30) * clamp(1.0 - (component_count - 1) / 5.0)
+        repeated_object_penalty = clamp((component_count - 1) / 4.0) * clamp(
+            1.0 - component_dominance
+        )
+        single_object_score = clamp((component_dominance - 0.62) / 0.30) * clamp(
+            1.0 - (component_count - 1) / 5.0
+        )
 
         rim_source = Image.new("L", (width, height))
-        rim_source.putdata([255 if index in component_pixels else 0 for index in range(width * height)])
+        rim_source.putdata(
+            [255 if index in component_pixels else 0 for index in range(width * height)]
+        )
         rim_outer = rim_source.filter(ImageFilter.MaxFilter(11))
         rim_inner = rim_source.filter(ImageFilter.MaxFilter(3))
         outer_pixels = list(rim_outer.getdata())
         inner_pixels = list(rim_inner.getdata())
         rim_indices = [
-            index for index, value in enumerate(outer_pixels) if value > 0 and inner_pixels[index] == 0
+            index
+            for index, value in enumerate(outer_pixels)
+            if value > 0 and inner_pixels[index] == 0
         ]
         if rim_indices:
-            white_rim_fraction = sum(1 for index in rim_indices if pixels[index] > 220) / len(rim_indices)
+            white_rim_fraction = sum(
+                1 for index in rim_indices if pixels[index] > 220
+            ) / len(rim_indices)
             rim_score = clamp((white_rim_fraction - 0.55) / 0.35)
         else:
             white_rim_fraction = 0.0
@@ -379,16 +414,23 @@ def post_prompt(workflow: dict[str, Any], api_url: str) -> str:
 def wait_for_output(prompt_id: str, api_url: str, timeout: float) -> Path:
     deadline = time.time() + timeout
     while time.time() < deadline:
-        with urllib.request.urlopen(f"{api_url.rstrip('/')}/history/{prompt_id}", timeout=20) as response:
+        with urllib.request.urlopen(
+            f"{api_url.rstrip('/')}/history/{prompt_id}", timeout=20
+        ) as response:
             history = json.loads(response.read().decode("utf-8"))
         item = history.get(prompt_id)
         if item:
             status = item.get("status", {})
-            if not status.get("status_str") == "success" and status.get("completed") is False:
+            if (
+                not status.get("status_str") == "success"
+                and status.get("completed") is False
+            ):
                 messages = status.get("messages") or []
                 raise RuntimeError(f"Comfy prompt {prompt_id} failed: {messages}")
             if item.get("outputs") and "7" not in item["outputs"]:
-                raise RuntimeError(f"Comfy prompt {prompt_id} completed without SaveImage output")
+                raise RuntimeError(
+                    f"Comfy prompt {prompt_id} completed without SaveImage output"
+                )
         if item and item.get("status", {}).get("completed"):
             image = item["outputs"]["7"]["images"][0]
             return COMFY_OUTPUT / image["filename"]
@@ -407,7 +449,9 @@ def render_workflow(
     workflow["8"]["inputs"]["lora_name"] = candidate.lora_name
     workflow["8"]["inputs"]["strength_model"] = candidate.strength_model
     workflow["8"]["inputs"]["strength_clip"] = candidate.strength_clip
-    workflow["2"]["inputs"]["text"] = PROMPT_TEMPLATES[candidate.prompt_template_id].format(subject=subject)
+    workflow["2"]["inputs"]["text"] = PROMPT_TEMPLATES[
+        candidate.prompt_template_id
+    ].format(subject=subject)
     workflow["3"]["inputs"]["text"] = NEGATIVE_PROMPTS[candidate.negative_prompt_id]
     workflow["5"]["inputs"]["seed"] = 880_000 + candidate.seed_offset + subject_index
     workflow["5"]["inputs"]["steps"] = candidate.steps
@@ -434,7 +478,14 @@ def evaluate_candidate(
         prompt_id = post_prompt(workflow, api_url)
         image_path = wait_for_output(prompt_id, api_url, prompt_timeout)
         metrics = image_proxy_metrics(image_path)
-        subject_scores.append({"subject": subject, "prompt_id": prompt_id, "image": str(image_path), **metrics})
+        subject_scores.append(
+            {
+                "subject": subject,
+                "prompt_id": prompt_id,
+                "image": str(image_path),
+                **metrics,
+            }
+        )
         image_paths[subject] = image_path
         print(
             f"  {candidate.candidate_id} {subject}: score={metrics['score']:.3f} "
@@ -470,12 +521,62 @@ def write_sheet(path: Path, image_paths: dict[str, Path]) -> Path:
     return path
 
 
-def initial_population(rng: random.Random, population_size: int) -> list[StickerCandidate]:
+def initial_population(
+    rng: random.Random, population_size: int
+) -> list[StickerCandidate]:
     seeds = [
-        StickerCandidate("g0_c00", "cxsticker_v1.safetensors", 0.35, 0.30, 8.0, 32, 0, 0, "euler", "normal", 1000),
-        StickerCandidate("g0_c01", "cxsticker_v1.safetensors", 0.45, 0.35, 7.5, 28, 1, 0, "euler", "normal", 2000),
-        StickerCandidate("g0_c02", "cxsticker_v2.safetensors", 0.55, 0.45, 8.0, 32, 0, 0, "euler", "normal", 3000),
-        StickerCandidate("g0_c03", "cxsticker_v2.safetensors", 0.45, 0.35, 7.0, 28, 2, 1, "euler", "normal", 4000),
+        StickerCandidate(
+            "g0_c00",
+            "cxsticker_v1.safetensors",
+            0.35,
+            0.30,
+            8.0,
+            32,
+            0,
+            0,
+            "euler",
+            "normal",
+            1000,
+        ),
+        StickerCandidate(
+            "g0_c01",
+            "cxsticker_v1.safetensors",
+            0.45,
+            0.35,
+            7.5,
+            28,
+            1,
+            0,
+            "euler",
+            "normal",
+            2000,
+        ),
+        StickerCandidate(
+            "g0_c02",
+            "cxsticker_v2.safetensors",
+            0.55,
+            0.45,
+            8.0,
+            32,
+            0,
+            0,
+            "euler",
+            "normal",
+            3000,
+        ),
+        StickerCandidate(
+            "g0_c03",
+            "cxsticker_v2.safetensors",
+            0.45,
+            0.35,
+            7.0,
+            28,
+            2,
+            1,
+            "euler",
+            "normal",
+            4000,
+        ),
     ]
     while len(seeds) < population_size:
         seeds.append(random_candidate(rng, f"g0_c{len(seeds):02d}"))
@@ -498,11 +599,17 @@ def random_candidate(rng: random.Random, candidate_id: str) -> StickerCandidate:
     )
 
 
-def mutate_candidate(rng: random.Random, parent: StickerCandidate, candidate_id: str) -> StickerCandidate:
+def mutate_candidate(
+    rng: random.Random, parent: StickerCandidate, candidate_id: str
+) -> StickerCandidate:
     data = asdict(parent)
     data["candidate_id"] = candidate_id
-    data["strength_model"] = round(clamp(data["strength_model"] + rng.uniform(-0.12, 0.12), 0.15, 0.85), 2)
-    data["strength_clip"] = round(clamp(data["strength_clip"] + rng.uniform(-0.10, 0.10), 0.10, 0.70), 2)
+    data["strength_model"] = round(
+        clamp(data["strength_model"] + rng.uniform(-0.12, 0.12), 0.15, 0.85), 2
+    )
+    data["strength_clip"] = round(
+        clamp(data["strength_clip"] + rng.uniform(-0.10, 0.10), 0.10, 0.70), 2
+    )
     data["cfg"] = round(clamp(data["cfg"] + rng.uniform(-0.8, 0.8), 4.5, 10.5), 1)
     if rng.random() < 0.35:
         data["steps"] = rng.choice([20, 24, 28, 32, 36])
@@ -513,7 +620,9 @@ def mutate_candidate(rng: random.Random, parent: StickerCandidate, candidate_id:
     if rng.random() < 0.20:
         data["scheduler"] = rng.choice(["normal", "karras"])
     if rng.random() < 0.15:
-        data["lora_name"] = rng.choice(["cxsticker_v1.safetensors", "cxsticker_v2.safetensors"])
+        data["lora_name"] = rng.choice(
+            ["cxsticker_v1.safetensors", "cxsticker_v2.safetensors"]
+        )
     data["seed_offset"] = rng.randrange(10_000, 999_999)
     return StickerCandidate(**data)
 
@@ -532,10 +641,14 @@ def load_completed_results(jsonl_path: Path) -> dict[str, dict[str, Any]]:
             try:
                 result = json.loads(stripped)
             except json.JSONDecodeError as exc:
-                raise ValueError(f"Invalid JSONL row {line_number} in {jsonl_path}") from exc
+                raise ValueError(
+                    f"Invalid JSONL row {line_number} in {jsonl_path}"
+                ) from exc
             candidate_id = result.get("candidate", {}).get("candidate_id")
             if not candidate_id:
-                raise ValueError(f"Missing candidate_id in JSONL row {line_number} of {jsonl_path}")
+                raise ValueError(
+                    f"Missing candidate_id in JSONL row {line_number} of {jsonl_path}"
+                )
             completed[candidate_id] = result
     return completed
 
@@ -547,7 +660,9 @@ def resolve_subjects(benchmark: str, split: str, count: int) -> tuple[str, ...]:
     download COCO images; it uses the class names as held-out generation prompts.
     """
     if benchmark not in BENCHMARK_SPLITS:
-        raise ValueError(f"Unknown benchmark {benchmark!r}. Choose from {sorted(BENCHMARK_SUBJECTS)}")
+        raise ValueError(
+            f"Unknown benchmark {benchmark!r}. Choose from {sorted(BENCHMARK_SUBJECTS)}"
+        )
     if split not in BENCHMARK_SPLITS[benchmark]:
         raise ValueError(f"Unknown split {split!r} for benchmark {benchmark!r}")
     subjects = BENCHMARK_SPLITS[benchmark][split]
@@ -583,14 +698,20 @@ def run_evolution(args: argparse.Namespace) -> dict[str, Any]:
         print(f"generation {generation}")
         results = []
         for idx, candidate in enumerate(population):
-            candidate = StickerCandidate(**{**asdict(candidate), "candidate_id": f"g{generation}_c{idx:02d}"})
+            candidate = StickerCandidate(
+                **{**asdict(candidate), "candidate_id": f"g{generation}_c{idx:02d}"}
+            )
             if candidate.candidate_id in completed_results:
                 result = completed_results[candidate.candidate_id]
                 results.append(result)
-                print(f"  {candidate.candidate_id}: resumed score={result['score']:.3f}")
+                print(
+                    f"  {candidate.candidate_id}: resumed score={result['score']:.3f}"
+                )
                 continue
 
-            result = evaluate_candidate(candidate, subjects, args.api_url, run_dir, args.prompt_timeout)
+            result = evaluate_candidate(
+                candidate, subjects, args.api_url, run_dir, args.prompt_timeout
+            )
             results.append(result)
             all_results.append(result)
             completed_results[candidate.candidate_id] = result
@@ -598,18 +719,31 @@ def run_evolution(args: argparse.Namespace) -> dict[str, Any]:
                 handle.write(json.dumps(result) + "\n")
             if best is None or result["score"] > best["score"]:
                 best = result
-                (run_dir / "best.json").write_text(json.dumps(best, indent=2) + "\n", encoding="utf-8")
+                (run_dir / "best.json").write_text(
+                    json.dumps(best, indent=2) + "\n", encoding="utf-8"
+                )
                 print(f"  new best: {best['score']:.3f} {candidate.candidate_id}")
 
         ranked = sorted(results, key=lambda item: item["score"], reverse=True)
-        elites = [StickerCandidate(**item["candidate"]) for item in ranked[: max(2, args.population // 3)]]
+        elites = [
+            StickerCandidate(**item["candidate"])
+            for item in ranked[: max(2, args.population // 3)]
+        ]
         next_population = elites[:]
         while len(next_population) < args.population:
             if rng.random() < args.random_immigrant_rate:
-                next_population.append(random_candidate(rng, f"g{generation + 1}_c{len(next_population):02d}"))
+                next_population.append(
+                    random_candidate(
+                        rng, f"g{generation + 1}_c{len(next_population):02d}"
+                    )
+                )
             else:
                 parent = rng.choice(elites)
-                next_population.append(mutate_candidate(rng, parent, f"g{generation + 1}_c{len(next_population):02d}"))
+                next_population.append(
+                    mutate_candidate(
+                        rng, parent, f"g{generation + 1}_c{len(next_population):02d}"
+                    )
+                )
         population = next_population[: args.population]
 
     assert best is not None
@@ -624,11 +758,15 @@ def run_evolution(args: argparse.Namespace) -> dict[str, Any]:
         "run_dir": str(run_dir),
         "evaluations": len(all_results),
     }
-    (run_dir / "report.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    (run_dir / "report.json").write_text(
+        json.dumps(report, indent=2) + "\n", encoding="utf-8"
+    )
     return report
 
 
-def candidate_from_json(path: Path, candidate_id: str = "fixed_c00") -> StickerCandidate:
+def candidate_from_json(
+    path: Path, candidate_id: str = "fixed_c00"
+) -> StickerCandidate:
     data = json.loads(path.read_text(encoding="utf-8"))
     if "best" in data:
         candidate_data = data["best"]["candidate"]
@@ -650,7 +788,9 @@ def run_fixed_candidate(args: argparse.Namespace) -> dict[str, Any]:
     run_dir.mkdir(parents=True, exist_ok=True)
 
     candidate = candidate_from_json(args.candidate_json)
-    result = evaluate_candidate(candidate, subjects, args.api_url, run_dir, args.prompt_timeout)
+    result = evaluate_candidate(
+        candidate, subjects, args.api_url, run_dir, args.prompt_timeout
+    )
     report = {
         "seed": args.seed,
         "benchmark": args.benchmark,
@@ -661,8 +801,12 @@ def run_fixed_candidate(args: argparse.Namespace) -> dict[str, Any]:
         "run_dir": str(run_dir),
         "evaluations": 1,
     }
-    (run_dir / "candidate_evaluation.json").write_text(json.dumps(result, indent=2) + "\n", encoding="utf-8")
-    (run_dir / "report.json").write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
+    (run_dir / "candidate_evaluation.json").write_text(
+        json.dumps(result, indent=2) + "\n", encoding="utf-8"
+    )
+    (run_dir / "report.json").write_text(
+        json.dumps(report, indent=2) + "\n", encoding="utf-8"
+    )
     return report
 
 
@@ -670,8 +814,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--api-url", default=API_URL)
     parser.add_argument("--output-dir", type=Path, default=ARTIFACT_ROOT / "evolution")
-    parser.add_argument("--benchmark", choices=sorted(BENCHMARK_SUBJECTS), default="toy")
-    parser.add_argument("--split", choices=("train", "dev", "test", "all"), default="all")
+    parser.add_argument(
+        "--benchmark", choices=sorted(BENCHMARK_SUBJECTS), default="toy"
+    )
+    parser.add_argument(
+        "--split", choices=("train", "dev", "test", "all"), default="all"
+    )
     parser.add_argument(
         "--candidate-json",
         type=Path,

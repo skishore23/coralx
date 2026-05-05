@@ -193,7 +193,9 @@ def _aggregate_gsm8k_lora_seed_reports(
 ) -> dict[str, Any]:
     """Aggregate single-seed proof reports into one framework-level proof report."""
     if not seed_reports:
-        raise ValueError("FAIL-FAST: proof aggregation requires at least one seed report")
+        raise ValueError(
+            "FAIL-FAST: proof aggregation requires at least one seed report"
+        )
 
     base = _mean_fitness_record(
         [report["base_model_baseline"] for report in seed_reports],
@@ -210,6 +212,10 @@ def _aggregate_gsm8k_lora_seed_reports(
     evolution_best = _mean_fitness_record(
         [report["evolution"]["best"] for report in seed_reports],
         "evolution_best_mean",
+    )
+    evolution_best_exact = _mean_optional_fitness_record(
+        [report["evolution"].get("best_by_exact_accuracy") for report in seed_reports],
+        "evolution_best_exact_mean",
     )
     held_out = _mean_fitness_record(
         [report["held_out"] for report in seed_reports],
@@ -233,6 +239,7 @@ def _aggregate_gsm8k_lora_seed_reports(
             "status": "completed",
             "best": evolution_best,
             "best_by_fitness": evolution_best,
+            "best_by_exact_accuracy": evolution_best_exact,
         },
         "base_model_baseline": base,
         "fixed_baseline": fixed,
@@ -243,6 +250,7 @@ def _aggregate_gsm8k_lora_seed_reports(
             ],
         },
         "held_out": held_out,
+        "interpretation": _interpret(evolution_best, base, fixed, random_best),
         "artifacts": {
             "seed_reports": [
                 report["artifacts"]["proof_report"] for report in seed_reports
@@ -253,15 +261,52 @@ def _aggregate_gsm8k_lora_seed_reports(
     return report
 
 
-def _mean_fitness_record(records: list[dict[str, Any]], candidate_id: str) -> dict[str, Any]:
+def _mean_fitness_record(
+    records: list[dict[str, Any]], candidate_id: str
+) -> dict[str, Any]:
     """Return a mean-fitness summary for equivalent records across proof seeds."""
     if not records:
         raise ValueError("FAIL-FAST: cannot aggregate empty proof record list")
     fitness_values = [float(record["fitness"]) for record in records]
-    return {
+    summary = {
         "candidate_id": candidate_id,
+        "genome_id": candidate_id,
         "fitness": sum(fitness_values) / len(fitness_values),
         "seed_records": records,
+    }
+    metrics = _mean_metrics(records)
+    if metrics:
+        summary["metrics"] = metrics
+    return summary
+
+
+def _mean_optional_fitness_record(
+    records: list[dict[str, Any] | None], candidate_id: str
+) -> dict[str, Any] | None:
+    """Return a mean summary when optional per-seed records are available."""
+    present = [record for record in records if record is not None]
+    if not present:
+        return None
+    return _mean_fitness_record(present, candidate_id)
+
+
+def _mean_metrics(records: list[dict[str, Any]]) -> dict[str, float]:
+    """Average numeric metric fields that are present across seed records."""
+    metric_values: dict[str, list[float]] = {}
+    for record in records:
+        metrics = _metrics_dict(record)
+        if not metrics:
+            continue
+        for key, value in metrics.items():
+            if isinstance(value, bool):
+                continue
+            if isinstance(value, int | float):
+                metric_values.setdefault(key, []).append(float(value))
+
+    return {
+        key: sum(values) / len(values)
+        for key, values in sorted(metric_values.items())
+        if values
     }
 
 
@@ -439,6 +484,14 @@ def _interpret(
 
 
 def _exact_accuracy(record: dict[str, Any] | None) -> float | None:
+    metrics = _metrics_dict(record)
+    if not metrics:
+        return None
+    value = metrics.get("exact_accuracy")
+    return float(value) if value is not None else None
+
+
+def _metrics_dict(record: dict[str, Any] | None) -> dict[str, Any] | None:
     if record is None:
         return None
     metrics = record.get("metrics")
@@ -448,8 +501,7 @@ def _exact_accuracy(record: dict[str, Any] | None) -> float | None:
             metrics = metadata.get("evaluation")
     if not isinstance(metrics, dict):
         return None
-    value = metrics.get("exact_accuracy")
-    return float(value) if value is not None else None
+    return metrics
 
 
 def _proof_quality_summary(report: dict[str, Any]) -> dict[str, Any]:
@@ -472,8 +524,7 @@ def _required_report_value(report: dict[str, Any], *path: str) -> Any:
     for key in path:
         if not isinstance(current, dict) or key not in current:
             raise ValueError(
-                "FAIL-FAST: proof report missing required field "
-                + ".".join(path)
+                "FAIL-FAST: proof report missing required field " + ".".join(path)
             )
         current = current[key]
     return current

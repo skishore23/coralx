@@ -738,11 +738,11 @@ class GSM8KLoRAFitness(FitnessFn):
         )
 
         return MultiObjectiveScores(
-            bugfix=score,
-            style=score,
-            security=score,
-            runtime=score,
-            syntax=score,
+            task_score=metrics.exact_accuracy,
+            quality_score=metrics.formatted_answer_rate,
+            risk_score=1.0,
+            efficiency_score=metrics.loss_score,
+            validity_score=metrics.formatted_answer_rate,
         )
 
 

@@ -115,9 +115,11 @@ def create_executor(config: CoralConfig) -> Executor:
     executor_type = config.infra.executor
 
     if executor_type == "local":
-        from infra.executors.local import LocalExecutor
+        from infra.executors.local import LocalExecutor, LocalExecutorConfig
 
-        executor = LocalExecutor()
+        executor = LocalExecutor(
+            LocalExecutorConfig(max_workers=config.execution.max_workers)
+        )
     else:
         raise ValueError(f"Unknown executor type: {executor_type}")
 
@@ -144,9 +146,9 @@ class ServiceContainer:
         fitness_fn: FitnessFn | None = None,
         executor: Executor | None = None,
         dataset_provider: DatasetProvider | None = None,
-        model_factory: Callable[
-            [AdapterConfig, Genome | None], ModelRunner
-        ] | None = None,
+        model_factory: (
+            Callable[[AdapterConfig, Genome | None], ModelRunner] | None
+        ) = None,
         run_id: str | None = None,
     ) -> EvolutionServices:
         """Get evolution services (lazy-loaded).

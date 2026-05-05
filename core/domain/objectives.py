@@ -51,7 +51,9 @@ class ObjectiveVector:
 
         total_weight = sum(float(weights[key]) for key in value_keys)
         if total_weight <= 0.0:
-            raise ValueError("FAIL-FAST: objective weights must sum to a positive value")
+            raise ValueError(
+                "FAIL-FAST: objective weights must sum to a positive value"
+            )
 
         objectives = tuple(
             Objective(
@@ -83,7 +85,9 @@ class ObjectiveVector:
         """Return normalized weighted scalar fitness."""
         total_weight = sum(objective.weight for objective in self.objectives)
         if total_weight <= 0.0:
-            raise ValueError("FAIL-FAST: objective weights must sum to a positive value")
+            raise ValueError(
+                "FAIL-FAST: objective weights must sum to a positive value"
+            )
         return (
             sum(objective.value * objective.weight for objective in self.objectives)
             / total_weight

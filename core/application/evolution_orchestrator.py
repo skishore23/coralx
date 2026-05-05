@@ -259,22 +259,13 @@ class EvolutionOrchestrator(LoggingMixin):
             f"Evaluating genomes: {len(unevaluated)} unevaluated, {len(evaluated)} already evaluated"
         )
 
-        # Use executor and fitness function to evaluate genomes
-        # This is a simplified interface - the actual implementation would
-        # handle the complexities of training and evaluation
         newly_evaluated = []
+        evaluation_results = self._submit_population_evaluations(unevaluated)
 
-        for genome in unevaluated:
+        for genome, evaluation_result in zip(
+            unevaluated, evaluation_results, strict=True
+        ):
             try:
-                # This would typically involve:
-                # 1. Training the adapter if not cached
-                # 2. Running inference/evaluation
-                # 3. Calculating fitness scores
-
-                # Get multi-objective evaluation
-                evaluation_result = self.services.executor.submit(
-                    self._evaluate_single_genome_with_scores_sync, genome
-                )
                 if not evaluation_result.is_successful():
                     raise RuntimeError(
                         evaluation_result.error
@@ -319,6 +310,23 @@ class EvolutionOrchestrator(LoggingMixin):
         )
 
         return result_population
+
+    def _submit_population_evaluations(self, genomes: list[Genome]):
+        """Submit population evaluations through the configured executor."""
+        submit_batch = getattr(self.services.executor, "submit_batch", None)
+        if callable(submit_batch) and len(genomes) > 1:
+            tasks = [
+                (self._evaluate_single_genome_with_scores_sync, (genome,), {})
+                for genome in genomes
+            ]
+            return submit_batch(tasks)
+
+        return [
+            self.services.executor.submit(
+                self._evaluate_single_genome_with_scores_sync, genome
+            )
+            for genome in genomes
+        ]
 
     async def _evaluate_single_genome(self, genome: Genome) -> float:
         """Evaluate a single genome's fitness.

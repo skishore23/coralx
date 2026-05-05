@@ -41,6 +41,8 @@ dev = [
     "black>=22.0.0",
     "ruff>=0.1.0",
     "mypy>=1.0.0",
+    "bandit>=1.7.5",
+    "flake8>=6.1.0",
     "pre-commit>=3.0.0",
 ]
 ml = [

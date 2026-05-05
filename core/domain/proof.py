@@ -27,8 +27,7 @@ def validate_proof_quality(report: Mapping[str, Any]) -> ProofQualityVerdict:
     missing = tuple(key for key in REQUIRED_COMPARISONS if key not in report)
     if missing:
         raise ValueError(
-            "FAIL-FAST: proof report missing comparative records: "
-            + ", ".join(missing)
+            "FAIL-FAST: proof report missing comparative records: " + ", ".join(missing)
         )
 
     base = _fitness(report["base"], "base")

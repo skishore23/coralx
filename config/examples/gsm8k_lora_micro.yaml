@@ -39,7 +39,7 @@ experiment:
     eval_samples: 12
     max_train_steps: 12
     max_new_tokens: 64
-    loss_weight: 1.0
+    loss_weight: 0.5
     device: auto
 
 training:
@@ -57,11 +57,11 @@ training:
 evaluation:
   test_samples: 12
   fitness_weights:
-    bugfix: 0.2
-    style: 0.2
-    security: 0.2
-    runtime: 0.2
-    syntax: 0.2
+    task_score: 0.5
+    quality_score: 0.0
+    risk_score: 0.0
+    efficiency_score: 0.5
+    validity_score: 0.0
   baseline_testing:
     enabled: false
 

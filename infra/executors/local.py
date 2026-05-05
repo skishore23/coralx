@@ -144,28 +144,79 @@ class LocalExecutor(BaseExecutor):
         timeout = timeout or self.config.default_timeout
         logger.info(f"Submitting batch of {len(tasks)} tasks")
 
-        results = []
+        if self._executor is None:
+            self._executor = ThreadPoolExecutor(max_workers=self.config.max_workers)
+
+        batch_start = time.time()
+        futures = []
         for i, (func, args, kwargs) in enumerate(tasks):
             try:
-                result = self.submit(func, *args, timeout=timeout, **kwargs)
-                results.append(result)
-                logger.debug(
-                    f"Batch task {i + 1}/{len(tasks)} completed with status {result.status}"
-                )
+                futures.append((i, func, self._executor.submit(func, *args, **kwargs)))
             except Exception as e:
                 logger.error(f"Batch task {i + 1}/{len(tasks)} failed: {e}")
-                results.append(
-                    ExecutionResult(
-                        status=ExecutionStatus.FAILED,
-                        error=str(e),
-                        metadata={"function": func.__name__, "task_index": i},
+                futures.append(
+                    (
+                        i,
+                        func,
+                        ExecutionResult(
+                            status=ExecutionStatus.FAILED,
+                            error=str(e),
+                            metadata={"function": func.__name__, "task_index": i},
+                        ),
                     )
                 )
 
-        successful = sum(1 for r in results if r.is_successful())
+        results: list[ExecutionResult | None] = [None] * len(tasks)
+        for i, func, future_or_result in futures:
+            if isinstance(future_or_result, ExecutionResult):
+                results[i] = future_or_result
+                continue
+
+            task_started = time.time()
+            try:
+                result_timeout = None
+                if self.config.enable_timeout:
+                    elapsed = time.time() - batch_start
+                    result_timeout = max(0.0, timeout + 1.0 - elapsed)
+                result = future_or_result.result(timeout=result_timeout)
+                execution_time = time.time() - task_started
+                results[i] = ExecutionResult(
+                    status=ExecutionStatus.COMPLETED,
+                    result=result,
+                    execution_time=execution_time,
+                    metadata={"function": func.__name__, "task_index": i},
+                )
+                logger.debug(
+                    f"Batch task {i + 1}/{len(tasks)} completed with status {results[i].status}"
+                )
+            except FutureTimeoutError:
+                future_or_result.cancel()
+                execution_time = time.time() - task_started
+                results[i] = ExecutionResult(
+                    status=ExecutionStatus.TIMEOUT,
+                    error=f"Function timed out after {timeout}s",
+                    execution_time=execution_time,
+                    metadata={
+                        "function": func.__name__,
+                        "task_index": i,
+                        "timeout": timeout,
+                    },
+                )
+            except Exception as e:
+                execution_time = time.time() - task_started
+                logger.error(f"Batch task {i + 1}/{len(tasks)} failed: {e}")
+                results[i] = ExecutionResult(
+                    status=ExecutionStatus.FAILED,
+                    error=str(e),
+                    execution_time=execution_time,
+                    metadata={"function": func.__name__, "task_index": i},
+                )
+
+        completed_results = [result for result in results if result is not None]
+        successful = sum(1 for r in completed_results if r.is_successful())
         logger.info(f"Batch execution completed: {successful}/{len(tasks)} successful")
 
-        return results
+        return completed_results
 
     def shutdown(self) -> None:
         """Shutdown the executor and clean up resources."""

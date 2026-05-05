@@ -275,7 +275,9 @@ class GSM8KPromptDataset(DatasetProvider):
         dev_rows = [
             _normalize_row("dev", index, row)
             for index, row in enumerate(
-                train_split.select(range(reflection_count, reflection_count + dev_count))
+                train_split.select(
+                    range(reflection_count, reflection_count + dev_count)
+                )
             )
         ]
         test_rows = [
@@ -322,15 +324,25 @@ def create_initial_prompt_population(
         genome = PromptGenome(
             id=f"gen0_prompt{index:04d}",
             system_prompt=SYSTEM_PROMPT_FAMILIES[index % len(SYSTEM_PROMPT_FAMILIES)],
-            reasoning_instruction=REASONING_INSTRUCTIONS[0]
-            if index == 0
-            else REASONING_INSTRUCTIONS[rng.randrange(len(REASONING_INSTRUCTIONS))],
-            answer_format_instruction=ANSWER_FORMAT_INSTRUCTIONS[0]
-            if index == 0
-            else ANSWER_FORMAT_INSTRUCTIONS[rng.randrange(len(ANSWER_FORMAT_INSTRUCTIONS))],
-            verification_instruction=VERIFICATION_INSTRUCTIONS[0]
-            if index == 0
-            else VERIFICATION_INSTRUCTIONS[rng.randrange(len(VERIFICATION_INSTRUCTIONS))],
+            reasoning_instruction=(
+                REASONING_INSTRUCTIONS[0]
+                if index == 0
+                else REASONING_INSTRUCTIONS[rng.randrange(len(REASONING_INSTRUCTIONS))]
+            ),
+            answer_format_instruction=(
+                ANSWER_FORMAT_INSTRUCTIONS[0]
+                if index == 0
+                else ANSWER_FORMAT_INSTRUCTIONS[
+                    rng.randrange(len(ANSWER_FORMAT_INSTRUCTIONS))
+                ]
+            ),
+            verification_instruction=(
+                VERIFICATION_INSTRUCTIONS[0]
+                if index == 0
+                else VERIFICATION_INSTRUCTIONS[
+                    rng.randrange(len(VERIFICATION_INSTRUCTIONS))
+                ]
+            ),
             few_shot_example_ids=few_shots,
             few_shot_order=tuple(order),
             temperature=_sample_float(rng, settings.temperature_range),
@@ -371,9 +383,7 @@ def strong_cot_prompt_genome(settings: GSM8KPromptSettings) -> PromptGenome:
     return PromptGenome(
         id="strong_cot_prompt",
         system_prompt="You are a careful math solver. Solve GSM8K problems exactly.",
-        reasoning_instruction=(
-            "Do the arithmetic internally. Do not show steps."
-        ),
+        reasoning_instruction=("Do the arithmetic internally. Do not show steps."),
         answer_format_instruction=(
             "Output exactly one line: \\boxed{number}. No explanation."
         ),
@@ -538,7 +548,9 @@ class GSM8KPromptRunner(ModelRunner):
 
         latency_seconds = time.time() - started
         total = max(len(rows), 1)
-        avg_tokens = statistics.mean(generated_token_counts) if generated_token_counts else 0.0
+        avg_tokens = (
+            statistics.mean(generated_token_counts) if generated_token_counts else 0.0
+        )
         metrics = PromptEvaluationMetrics(
             exact_accuracy=correct / total,
             token_efficiency=1.0 / (1.0 + avg_tokens / 256.0),
@@ -934,7 +946,9 @@ def pareto_front(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """Return non-dominated candidate records."""
     front = []
     for candidate in records:
-        if any(_dominates(other, candidate) for other in records if other is not candidate):
+        if any(
+            _dominates(other, candidate) for other in records if other is not candidate
+        ):
             continue
         front.append(candidate)
     return sorted(
@@ -964,7 +978,11 @@ def _best_by_exact(records: list[dict[str, Any]]) -> dict[str, Any] | None:
 def _select_elite_records(
     records: list[dict[str, Any]], count: int, base_exact: float
 ) -> list[dict[str, Any]]:
-    eligible = [row for row in pareto_front(records) if _metric(row, "exact_accuracy") >= base_exact]
+    eligible = [
+        row
+        for row in pareto_front(records)
+        if _metric(row, "exact_accuracy") >= base_exact
+    ]
     if not eligible:
         eligible = pareto_front(records)
     return eligible[:count]
@@ -1089,20 +1107,16 @@ def reflective_mutation(
     seed: int,
 ) -> PromptGenome:
     """GEPA-style reflective mutation from observed failures."""
-    missing = sum(1 for trace in failure_traces if trace.get("parse_result") == "missing")
+    missing = sum(
+        1 for trace in failure_traces if trace.get("parse_result") == "missing"
+    )
     arithmetic = len(failure_traces) - missing
     if missing > arithmetic:
-        revised_format = (
-            "Output exactly one line: \\boxed{number}. No explanation."
-        )
-        revised_reasoning = (
-            "Do the arithmetic internally. Do not show steps."
-        )
+        revised_format = "Output exactly one line: \\boxed{number}. No explanation."
+        revised_reasoning = "Do the arithmetic internally. Do not show steps."
     else:
         revised_format = "Output exactly one line: \\boxed{number}. No explanation."
-        revised_reasoning = (
-            "Do the arithmetic internally. Do not show steps."
-        )
+        revised_reasoning = "Do the arithmetic internally. Do not show steps."
     revised_verification = (
         "Check the answer before writing it, but do not show the check."
     )
@@ -1124,7 +1138,9 @@ def reflective_mutation(
     )
 
 
-def _failure_traces_from_record(record: dict[str, Any], limit: int = 8) -> list[dict[str, Any]]:
+def _failure_traces_from_record(
+    record: dict[str, Any], limit: int = 8
+) -> list[dict[str, Any]]:
     traces = []
     for prediction in record["metrics"].get("predictions", []):
         if prediction.get("correct"):
@@ -1159,10 +1175,16 @@ def _make_next_generation(
     elite_count = max(1, math.ceil(population_size * 0.4))
     elites = _select_elite_records(records, elite_count, base_exact)
     by_id = {genome.id: genome for genome in current}
-    parents = [by_id[row["candidate_id"]] for row in elites if row["candidate_id"] in by_id]
+    parents = [
+        by_id[row["candidate_id"]] for row in elites if row["candidate_id"] in by_id
+    ]
     if not parents:
         best = _best_by_exact(records)
-        parents = [by_id[best["candidate_id"]]] if best and best["candidate_id"] in by_id else current[:1]
+        parents = (
+            [by_id[best["candidate_id"]]]
+            if best and best["candidate_id"] in by_id
+            else current[:1]
+        )
 
     next_population = [
         parent.with_generation(generation, "elite", f"gen{generation}_elite{i:04d}")
@@ -1387,9 +1409,7 @@ def _evaluate_on_test(
             "id": f"test_{record['suite']}_{record['candidate_id']}",
             "system_prompt": record["genome"]["system_prompt"],
             "reasoning_instruction": record["genome"]["reasoning_instruction"],
-            "answer_format_instruction": record["genome"][
-                "answer_format_instruction"
-            ],
+            "answer_format_instruction": record["genome"]["answer_format_instruction"],
             "verification_instruction": record["genome"]["verification_instruction"],
             "few_shot_example_ids": record["genome"]["few_shot_example_ids"],
             "few_shot_order": record["genome"]["few_shot_order"],
@@ -1544,10 +1564,7 @@ def _aggregate_prompt_seed_reports(
     """Aggregate prompt proof reports across actual seed runs."""
     if not seed_reports:
         raise ValueError("FAIL-FAST: prompt proof aggregation requires seed reports")
-    test_records = [
-        report["test"]["best_by_suite"]
-        for report in seed_reports
-    ]
+    test_records = [report["test"]["best_by_suite"] for report in seed_reports]
     base = _mean_prompt_record(
         [records["base_prompt"] for records in test_records], "base_prompt_mean"
     )
@@ -1630,7 +1647,9 @@ def _mean_optional_prompt_record(
     return _mean_prompt_record(records, candidate_id) if records else None
 
 
-def _mean_prompt_record(records: list[dict[str, Any]], candidate_id: str) -> dict[str, Any]:
+def _mean_prompt_record(
+    records: list[dict[str, Any]], candidate_id: str
+) -> dict[str, Any]:
     """Return a mean metric record across proof seeds."""
     if not records:
         raise ValueError("FAIL-FAST: cannot average empty prompt records")
@@ -1673,7 +1692,10 @@ def run_gsm8k_prompt_evolution_proof(
         for seed_config in _prompt_proof_seed_configs(config)
     ]
     report = _aggregate_prompt_seed_reports(config, seed_reports, started_at)
-    destination = output_path or _settings(config.model_dump(mode="json")).output_dir / "proof_report.json"
+    destination = (
+        output_path
+        or _settings(config.model_dump(mode="json")).output_dir / "proof_report.json"
+    )
     report["artifacts"]["proof_report"] = str(destination)
     write_json(destination, report)
     return report
@@ -1701,7 +1723,9 @@ def _run_gsm8k_prompt_evolution_single_seed_proof(
 
     runner = GSM8KPromptRunner(config_dict)
     logger = PromptProofLogger(settings.output_dir, resume=settings.resume)
-    budget = random_trials or config.execution.population_size * config.execution.generations
+    budget = (
+        random_trials or config.execution.population_size * config.execution.generations
+    )
     enabled_suites = _enabled_suites(config_dict)
 
     base_record = _evaluate_baseline(
@@ -1898,7 +1922,9 @@ class GSM8KPromptEvolutionPlugin:
         return GSM8KPromptDataset(self.config)
 
     def model_factory(self) -> Callable[[Any, Any | None], ModelRunner]:
-        def create_model(_lora_cfg: Any = None, _genome: Any | None = None) -> ModelRunner:
+        def create_model(
+            _lora_cfg: Any = None, _genome: Any | None = None
+        ) -> ModelRunner:
             return GSM8KPromptRunner(self.config)
 
         return create_model

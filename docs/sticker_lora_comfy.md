@@ -189,6 +189,34 @@ python scripts/sticker_lora_evolve.py \
   --seed 505
 ```
 
+## Core Plugin Smoke Run
+
+The first-class CORAL-X plugin target uses the same Comfy workflow and existing
+LoRA files, but runs through the normal plugin registry and orchestrator. It
+does not train a new LoRA per genome; the core genome is mapped into Comfy
+inference settings such as LoRA choice, strengths, CFG, steps, prompt template,
+negative prompt, scheduler, and seed offset.
+
+Validate the plugin wiring without contacting Comfy:
+
+```bash
+python -m core.cli.main run \
+  --config config/examples/sticker_lora_comfy_smoke.yaml \
+  --dry-run
+```
+
+After ComfyUI is running on `127.0.0.1:8188`, run the core target:
+
+```bash
+python -m core.cli.main run \
+  --config config/examples/sticker_lora_comfy_smoke.yaml
+```
+
+The plugin fails fast if the API workflow is missing, required workflow nodes
+are absent, or the Comfy API is not reachable. Use
+`experiment.evaluation.workflow_path`, `comfy_output_dir`, `api_url`, and
+`prompt_timeout` to point it at a different local Comfy setup.
+
 Longer dev optimization:
 
 ```bash

@@ -9,7 +9,9 @@ from PIL import Image, ImageDraw
 
 
 def load_evolve_module():
-    script_path = Path(__file__).resolve().parents[1] / "scripts" / "sticker_lora_evolve.py"
+    script_path = (
+        Path(__file__).resolve().parents[1] / "scripts" / "sticker_lora_evolve.py"
+    )
     spec = importlib.util.spec_from_file_location("sticker_lora_evolve", script_path)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
@@ -85,7 +87,9 @@ def test_load_completed_results_for_resume(tmp_path):
         {"candidate": {"candidate_id": "g0_c00"}, "score": 0.1},
         {"candidate": {"candidate_id": "g0_c01"}, "score": 0.2},
     ]
-    path.write_text("\n".join(module.json.dumps(row) for row in rows) + "\n", encoding="utf-8")
+    path.write_text(
+        "\n".join(module.json.dumps(row) for row in rows) + "\n", encoding="utf-8"
+    )
 
     completed = module.load_completed_results(path)
 
@@ -117,7 +121,9 @@ def write_repeated_objects(path: Path) -> None:
     draw = ImageDraw.Draw(image)
     for box in ((28, 72, 106, 150), (150, 72, 228, 150)):
         draw.ellipse(box, fill="black")
-        inset = tuple(value + offset for value, offset in zip(box, (8, 8, -8, -8), strict=False))
+        inset = tuple(
+            value + offset for value, offset in zip(box, (8, 8, -8, -8), strict=False)
+        )
         draw.ellipse(inset, fill=(220, 40, 70))
     image.save(path)
 
