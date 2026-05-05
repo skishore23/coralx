@@ -13,7 +13,7 @@ from typing import Any, Protocol
 
 from core.domain.cheap_knobs import CheapKnobs
 from core.domain.genome import Genome, MultiObjectiveScores
-from core.domain.mapping import LoRAConfig
+from core.domain.mapping import AdapterConfig
 
 
 class ExecutionStatus(str, Enum):
@@ -51,7 +51,7 @@ class ExecutionResult:
 
 
 class ModelRunner(Protocol):
-    """Protocol for running language models with LoRA adaptations."""
+    """Protocol for running target models with candidate parameters."""
 
     def generate(
         self, prompt: str, max_tokens: int, cheap_knobs: CheapKnobs | None = None
@@ -105,7 +105,7 @@ class Plugin(Protocol):
         """Create the dataset provider."""
         ...
 
-    def model_factory(self) -> Callable[[LoRAConfig, Genome | None], ModelRunner]:
+    def model_factory(self) -> Callable[[AdapterConfig, Genome | None], ModelRunner]:
         """Create a model factory."""
         ...
 

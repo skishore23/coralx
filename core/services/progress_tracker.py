@@ -71,11 +71,11 @@ class ProgressTracker(LoggingMixin):
             "progress_percent": 0.0,
             "best_fitness": 0.0,
             "best_scores": {
-                "bugfix": 0.0,
-                "style": 0.0,
-                "security": 0.0,
-                "runtime": 0.0,
-                "syntax": 0.0,
+                "task_score": 0.0,
+                "quality_score": 0.0,
+                "risk_score": 0.0,
+                "efficiency_score": 0.0,
+                "validity_score": 0.0,
             },
             "cache_stats": {"hit_rate": 0.0, "total_adapters": 0, "cache_size_mb": 0},
             "training_stats": {
@@ -139,22 +139,15 @@ class ProgressTracker(LoggingMixin):
         if best_genome:
             progress_data["best_fitness"] = best_genome.fitness
             if best_genome.has_multi_scores():
-                scores = best_genome.multi_scores
-                progress_data["best_scores"] = {
-                    "bugfix": scores.bugfix,
-                    "style": scores.style,
-                    "security": scores.security,
-                    "runtime": scores.runtime,
-                    "syntax": getattr(scores, "syntax", 0.0),
-                }
+                progress_data["best_scores"] = best_genome.multi_scores.to_dict()
         else:
             progress_data["best_fitness"] = 0.0
             progress_data["best_scores"] = {
-                "bugfix": 0.0,
-                "style": 0.0,
-                "security": 0.0,
-                "runtime": 0.0,
-                "syntax": 0.0,
+                "task_score": 0.0,
+                "quality_score": 0.0,
+                "risk_score": 0.0,
+                "efficiency_score": 0.0,
+                "validity_score": 0.0,
             }
 
         # Load existing progress to preserve additional data

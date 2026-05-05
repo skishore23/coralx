@@ -101,6 +101,7 @@ class ExecutionConfig(BaseModel):
     survival_rate: float = Field(default=0.5, ge=0.0, le=1.0)
     crossover_rate: float = Field(default=0.7, ge=0.0, le=1.0)
     run_held_out_benchmark: bool = Field(default=False)
+    proof_seeds: list[int] = Field(default_factory=list)
     current_generation: int = Field(default=0, ge=0)
 
     @field_validator("crossover_rate")
@@ -168,20 +169,28 @@ class TrainingConfig(BaseModel):
 
 
 class FitnessWeights(BaseModel):
-    """Fitness function weights."""
+    """Target-neutral fitness weights."""
 
-    bugfix: float = Field(ge=0.0, le=1.0)
-    style: float = Field(ge=0.0, le=1.0)
-    security: float = Field(ge=0.0, le=1.0)
-    runtime: float = Field(ge=0.0, le=1.0)
-    syntax: float = Field(ge=0.0, le=1.0)
+    task_score: float | None = Field(default=None, ge=0.0, le=1.0)
+    quality_score: float | None = Field(default=None, ge=0.0, le=1.0)
+    risk_score: float | None = Field(default=None, ge=0.0, le=1.0)
+    efficiency_score: float | None = Field(default=None, ge=0.0, le=1.0)
+    validity_score: float | None = Field(default=None, ge=0.0, le=1.0)
+    bugfix: float | None = Field(default=None, ge=0.0, le=1.0)
+    style: float | None = Field(default=None, ge=0.0, le=1.0)
+    security: float | None = Field(default=None, ge=0.0, le=1.0)
+    runtime: float | None = Field(default=None, ge=0.0, le=1.0)
+    syntax: float | None = Field(default=None, ge=0.0, le=1.0)
 
     @model_validator(mode="after")
     def validate_weights_sum(self):
-        total = self.bugfix + self.style + self.security + self.runtime + self.syntax
+        total = sum(self.to_dict().values())
         if abs(total - 1.0) > 0.01:  # Allow small floating point errors
             raise ValueError(f"Fitness weights must sum to 1.0, got {total}")
         return self
+
+    def to_dict(self) -> dict[str, float]:
+        return _neutral_objective_dict(self, "fitness weight")
 
 
 class BaselineTestConfig(BaseModel):
@@ -272,24 +281,49 @@ class CheapKnobsConfig(BaseModel):
         return v
 
 
-class ObjectiveThresholds(BaseModel):
-    """Threshold values for objectives."""
+def _neutral_objective_dict(source: Any, context: str) -> dict[str, float]:
+    values = {
+        "task_score": _coalesce(source, "task_score", "bugfix"),
+        "quality_score": _coalesce(source, "quality_score", "style"),
+        "risk_score": _coalesce(source, "risk_score", "security"),
+        "efficiency_score": _coalesce(source, "efficiency_score", "runtime"),
+        "validity_score": _coalesce(source, "validity_score", "syntax"),
+    }
+    missing = tuple(key for key, value in values.items() if value is None)
+    if missing:
+        raise ValueError(
+            f"Missing {context} objective fields: " + ", ".join(missing)
+        )
+    return {key: float(value) for key, value in values.items()}
 
-    bugfix: float = Field(ge=0.0, le=1.0)
-    runtime: float = Field(ge=0.0, le=1.0)
-    security: float = Field(ge=0.0, le=1.0)
-    style: float = Field(ge=0.0, le=1.0)
-    syntax: float = Field(ge=0.0, le=1.0)
+
+def _coalesce(source: Any, neutral_key: str, legacy_key: str) -> float | None:
+    neutral = getattr(source, neutral_key)
+    legacy = getattr(source, legacy_key)
+    if neutral is not None and legacy is not None:
+        raise ValueError(
+            f"Provide either '{neutral_key}' or legacy alias '{legacy_key}', not both"
+        )
+    return neutral if neutral is not None else legacy
+
+
+class ObjectiveThresholds(BaseModel):
+    """Target-neutral threshold values for objectives."""
+
+    task_score: float | None = Field(default=None, ge=0.0, le=1.0)
+    quality_score: float | None = Field(default=None, ge=0.0, le=1.0)
+    risk_score: float | None = Field(default=None, ge=0.0, le=1.0)
+    efficiency_score: float | None = Field(default=None, ge=0.0, le=1.0)
+    validity_score: float | None = Field(default=None, ge=0.0, le=1.0)
+    bugfix: float | None = Field(default=None, ge=0.0, le=1.0)
+    runtime: float | None = Field(default=None, ge=0.0, le=1.0)
+    security: float | None = Field(default=None, ge=0.0, le=1.0)
+    style: float | None = Field(default=None, ge=0.0, le=1.0)
+    syntax: float | None = Field(default=None, ge=0.0, le=1.0)
 
     def to_dict(self) -> dict[str, float]:
         """Convert to dictionary for compatibility with threshold gate functions."""
-        return {
-            "bugfix": self.bugfix,
-            "style": self.style,
-            "security": self.security,
-            "runtime": self.runtime,
-            "syntax": self.syntax,
-        }
+        return _neutral_objective_dict(self, "threshold")
 
 
 class ThresholdConfig(BaseModel):

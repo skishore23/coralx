@@ -34,6 +34,7 @@ class GSM8KLoRASettings:
     max_seq_length: int
     train_samples: int
     eval_samples: int
+    held_out_samples: int
     max_train_steps: int
     max_new_tokens: int
     loss_weight: float
@@ -131,6 +132,7 @@ def _settings(config: dict[str, Any]) -> GSM8KLoRASettings:
         max_seq_length=int(model.get("max_seq_length", 384)),
         train_samples=int(evaluation.get("train_samples", 32)),
         eval_samples=int(evaluation.get("eval_samples", 16)),
+        held_out_samples=int(evaluation.get("held_out_samples", 16)),
         max_train_steps=int(evaluation.get("max_train_steps", 20)),
         max_new_tokens=int(evaluation.get("max_new_tokens", 64)),
         loss_weight=float(evaluation.get("loss_weight", 1.0)),
@@ -235,6 +237,9 @@ class GSM8KLoRADataset(DatasetProvider):
 
         train_count = min(self.settings.train_samples, len(train_split))
         eval_count = min(self.settings.eval_samples, len(eval_split))
+        held_out_count = min(
+            self.settings.held_out_samples, max(0, len(eval_split) - eval_count)
+        )
 
         train_rows = [
             {
@@ -252,12 +257,21 @@ class GSM8KLoRADataset(DatasetProvider):
             }
             for row in eval_split.select(range(eval_count))
         ]
+        held_out_rows = [
+            {
+                "question": row["question"],
+                "answer": row["answer"],
+                "final_answer": _extract_final_answer(row["answer"]),
+            }
+            for row in eval_split.select(range(eval_count, eval_count + held_out_count))
+        ]
 
         yield {
             "name": "gsm8k_lora",
             "dataset": "openai/gsm8k",
             "train": train_rows,
             "eval": eval_rows,
+            "held_out": held_out_rows,
         }
 
 

@@ -8,9 +8,15 @@ import sys
 from pathlib import Path
 
 import numpy as np
+import pytest
 import yaml
 
-from core.cli.proof import _best_evolution_candidate_by_exact_accuracy
+from core.cli.proof import (
+    _best_evolution_candidate_by_exact_accuracy,
+    _proof_quality_summary,
+    _proof_seed_configs,
+    _validate_proof_execution_policy,
+)
 from core.common.config import CoralConfig
 from core.domain.ca import CASeed
 from core.domain.experiment import create_experiment_config, create_initial_population
@@ -75,6 +81,13 @@ def _tiny_gsm8k_problem() -> dict:
                 "final_answer": "4",
             }
         ],
+        "held_out": [
+            {
+                "question": "What is 3 + 3?",
+                "answer": "#### 6",
+                "final_answer": "6",
+            }
+        ],
     }
 
 
@@ -90,6 +103,72 @@ def test_plugin_registry_resolves_supported_targets():
         assert callable(plugin.dataset)
         assert callable(plugin.model_factory)
         assert callable(plugin.fitness_fn)
+
+
+def test_sticker_lora_comfy_plugin_exposes_dataset_without_comfy_runtime():
+    """Sticker Comfy work should be a registered plugin boundary, not only a script."""
+    raw_config = _load_m1_config_dict()
+    raw_config["experiment"]["target"] = "sticker_lora_comfy"
+    raw_config["experiment"]["name"] = "sticker_lora_comfy"
+    raw_config["experiment"]["dataset"]["datasets"] = ["coco"]
+    config = CoralConfig.model_validate(raw_config)
+
+    plugin = create_plugin(config)
+    problem = next(iter(plugin.dataset().problems()))
+
+    assert problem["name"] == "sticker_lora_comfy"
+    assert problem["benchmark"] == "coco"
+    assert problem["dev_subjects"]
+    assert problem["test_subjects"]
+
+
+def test_sticker_lora_comfy_plugin_evaluates_via_script_mechanics(monkeypatch):
+    """The sticker plugin should adapt core genomes into script-backed evaluations."""
+    raw_config = _load_m1_config_dict()
+    raw_config["experiment"]["target"] = "sticker_lora_comfy"
+    raw_config["experiment"]["name"] = "sticker_lora_comfy"
+    raw_config["experiment"]["dataset"]["datasets"] = ["toy"]
+    raw_config["experiment"]["evaluation"] = {
+        "split": "dev",
+        "subjects": 2,
+        "api_url": "http://comfy.test",
+        "prompt_timeout": 12.0,
+    }
+    config = CoralConfig.model_validate(raw_config)
+    plugin = create_plugin(config)
+    fitness = plugin.fitness_fn()
+    problem = next(iter(plugin.dataset().problems()))
+    genome = _tiny_genome()
+
+    def fake_evaluate_candidate(candidate, subjects, api_url, output_dir, prompt_timeout):
+        assert candidate.candidate_id == genome.id
+        assert subjects == problem["dev_subjects"][:2]
+        assert api_url == "http://comfy.test"
+        assert output_dir == config.execution.output_dir
+        assert prompt_timeout == 12.0
+        return {
+            "score": 0.75,
+            "subjects": [
+                {
+                    "background": 0.8,
+                    "outline": 0.7,
+                    "edge": 0.6,
+                    "center": 0.9,
+                    "area": 0.5,
+                    "clutter_penalty": 0.1,
+                }
+            ],
+        }
+
+    import plugins.sticker_lora_comfy.plugin as sticker_plugin
+
+    monkeypatch.setattr(sticker_plugin.sticker_evolve, "evaluate_candidate", fake_evaluate_candidate)
+
+    scores = fitness.evaluate_multi_objective(genome, None, [problem])
+
+    assert scores.task_score == 0.75
+    assert scores.risk_score == 0.8
+    assert scores.validity_score == 0.9
 
 
 def test_gsm8k_lora_plugin_is_import_safe_without_ml_downloads():
@@ -234,6 +313,132 @@ def test_proof_exact_candidate_scan_ignores_previous_runs(tmp_path):
     assert best["genome_id"] == "current-best"
 
 
+def test_proof_quality_summary_fails_fast_without_held_out_and_seeds():
+    """Proof reports should fail fast without held-out and multi-seed evidence."""
+    with pytest.raises(ValueError, match="held_out"):
+        _proof_quality_summary(
+            {
+                "base_model_baseline": {"fitness": 0.4},
+                "fixed_baseline": {"fitness": 0.5},
+                "random_baseline": {"best": {"fitness": 0.6}},
+                "evolution": {"best": {"fitness": 0.7}},
+            }
+        )
+
+
+def test_proof_quality_summary_uses_no_experimental_serious_categories():
+    """Complete reports should expose a machine-checkable strong-claim verdict."""
+    summary = _proof_quality_summary(
+        {
+            "base_model_baseline": {"fitness": 0.4},
+            "fixed_baseline": {"fitness": 0.5},
+            "random_baseline": {"best": {"fitness": 0.6}},
+            "evolution": {"best": {"fitness": 0.7}},
+            "held_out": {"fitness": 0.65},
+            "seeds": [101, 103, 107],
+        }
+    )
+
+    assert "status" not in summary
+    assert summary["passes"] is True
+    assert summary["has_multi_seed_support"] is True
+
+
+def test_proof_execution_policy_requires_held_out_and_three_seeds(tmp_path):
+    """Framework proof mode should require held-out execution and multiple seeds."""
+    raw_config = _load_gsm8k_config_dict()
+    raw_config["execution"]["output_dir"] = str(tmp_path / "output")
+    raw_config["cache"]["artifacts_dir"] = str(tmp_path / "cache")
+    raw_config["execution"]["run_held_out_benchmark"] = False
+    raw_config["execution"]["proof_seeds"] = [101, 103, 107]
+    config = CoralConfig.model_validate(raw_config)
+
+    with pytest.raises(ValueError, match="run_held_out_benchmark"):
+        _validate_proof_execution_policy(config)
+
+    raw_config["execution"]["run_held_out_benchmark"] = True
+    raw_config["execution"]["proof_seeds"] = [101, 103]
+    config = CoralConfig.model_validate(raw_config)
+
+    with pytest.raises(ValueError, match="proof_seeds"):
+        _validate_proof_execution_policy(config)
+
+
+def test_proof_execution_policy_accepts_framework_level_requirements(tmp_path):
+    """Held-out and multi-seed proof requirements should live in framework config."""
+    raw_config = _load_gsm8k_config_dict()
+    raw_config["execution"]["output_dir"] = str(tmp_path / "output")
+    raw_config["cache"]["artifacts_dir"] = str(tmp_path / "cache")
+    raw_config["execution"]["run_held_out_benchmark"] = True
+    raw_config["execution"]["proof_seeds"] = [101, 103, 107]
+    config = CoralConfig.model_validate(raw_config)
+
+    assert _validate_proof_execution_policy(config) == (101, 103, 107)
+
+
+def test_documented_proof_configs_satisfy_execution_policy():
+    """Configs referenced for proof runs should satisfy the proof gate as committed."""
+    proof_configs = [
+        PROJECT_ROOT / "config" / "examples" / "gsm8k_lora_micro.yaml",
+        PROJECT_ROOT / "config" / "examples" / "gsm8k_math_benchmark.yaml",
+        *sorted(
+            (PROJECT_ROOT / "config" / "examples").glob("gsm8k_prompt_*.yaml")
+        ),
+    ]
+
+    for config_path in proof_configs:
+        config = CoralConfig.model_validate(yaml.safe_load(config_path.read_text()))
+
+        assert _validate_proof_execution_policy(config) == (42, 43, 44)
+
+
+def test_proof_seed_configs_create_isolated_runs(tmp_path):
+    """Each proof seed should produce an isolated config and artifact namespace."""
+    raw_config = _load_gsm8k_config_dict()
+    raw_config["execution"]["output_dir"] = str(tmp_path / "output")
+    raw_config["cache"]["artifacts_dir"] = str(tmp_path / "cache")
+    raw_config["execution"]["run_held_out_benchmark"] = True
+    raw_config["execution"]["proof_seeds"] = [101, 103, 107]
+    raw_config["cache"]["run_id"] = "proof"
+    config = CoralConfig.model_validate(raw_config)
+
+    configs = _proof_seed_configs(config)
+
+    assert tuple(seed_config.seed for seed_config in configs) == (101, 103, 107)
+    assert [seed_config.cache.run_id for seed_config in configs] == [
+        "proof_seed_101",
+        "proof_seed_103",
+        "proof_seed_107",
+    ]
+    assert {seed_config.execution.output_dir for seed_config in configs} == {
+        tmp_path / "output" / "seed_101",
+        tmp_path / "output" / "seed_103",
+        tmp_path / "output" / "seed_107",
+    }
+
+
+def test_gsm8k_held_out_problem_reuses_train_with_held_out_eval():
+    """Held-out proof evaluation should use the fixed train split and held-out eval rows."""
+    from core.cli.proof import _held_out_problem
+
+    problem = _tiny_gsm8k_problem()
+    held_out = _held_out_problem(problem)
+
+    assert held_out["train"] == problem["train"]
+    assert held_out["eval"] == problem["held_out"]
+
+
+def test_gsm8k_held_out_problem_requires_plugin_split():
+    """Proof mode should fail if a plugin does not expose held-out rows."""
+    from core.cli.proof import _held_out_problem
+
+    problem = _tiny_gsm8k_problem()
+    del problem["held_out"]
+
+    with pytest.raises(ValueError, match="held_out"):
+        _held_out_problem(problem)
+
+
 def test_gsm8k_config_dry_run_does_not_import_ml_stacks(tmp_path):
     """Dry-run should validate GSM8K wiring without importing downloader stacks."""
     raw_config = _load_gsm8k_config_dict()
@@ -287,11 +492,12 @@ from pathlib import Path
 sys.path.insert(0, {str(PROJECT_ROOT)!r})
 from core.application.services import create_evolution_services
 from core.common.config import CoralConfig
+from plugins.registry import create_plugin
 
 raw = yaml.safe_load(Path({str(M1_CONFIG)!r}).read_text())
 config = CoralConfig.model_validate(raw)
 assert 'plugins.fakenews_mini.plugin' not in sys.modules
-services = create_evolution_services(config)
+services = create_evolution_services(config, plugin=create_plugin(config))
 assert services.dataset_provider is not None
 assert services.model_factory is not None
 print('IMPORTED=' + str('plugins.fakenews_mini.plugin' in sys.modules))
@@ -415,8 +621,13 @@ def test_configured_ca_ranges_are_honored():
 def test_docs_and_metadata_match_supported_behavior():
     """License and documentation should match the supported architecture."""
     pyproject = (PROJECT_ROOT / "pyproject.toml").read_text()
+    root_conftest = (PROJECT_ROOT / "conftest.py").read_text()
     assert 'license = {text = "MIT"}' in pyproject
     assert "License :: OSI Approved :: MIT License" in pyproject
+    assert "--ignore=artifacts" in pyproject
+    assert "norecursedirs" in pyproject
+    assert '"artifacts"' in pyproject
+    assert 'collect_ignore_glob = ["artifacts/*"]' in root_conftest
 
     public_docs = "\n".join(
         path.read_text().lower()

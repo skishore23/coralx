@@ -1,7 +1,4 @@
-"""
-Default fitness function for CORAL-X.
-Fallback fitness function when no specific plugin is available.
-"""
+"""Default fitness function for local CORAL-X wiring tests."""
 
 from collections.abc import Iterable
 from typing import Any
@@ -11,7 +8,7 @@ from .genome import Genome, MultiObjectiveScores
 
 
 class DefaultFitnessFunction(FitnessFn):
-    """Default fitness function for M1 testing."""
+    """Deterministic neutral fitness function for wiring tests."""
 
     def __init__(self, config):
         self.config = config
@@ -36,9 +33,12 @@ class DefaultFitnessFunction(FitnessFn):
         problems: Iterable[dict[str, Any]],
         ca_features=None,
     ) -> MultiObjectiveScores:
-        """Multi-objective evaluation with mock scores."""
+        """Multi-objective evaluation with neutral constant scores."""
 
-        # For M1 testing, return mock scores
         return MultiObjectiveScores(
-            bugfix=0.5, style=0.5, security=0.5, runtime=0.5, syntax=0.5
+            task_score=0.5,
+            quality_score=0.5,
+            risk_score=0.5,
+            efficiency_score=0.5,
+            validity_score=0.5,
         )

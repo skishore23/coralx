@@ -6,6 +6,7 @@ import asyncio
 import itertools
 import json
 import time
+from dataclasses import asdict
 from pathlib import Path
 from random import Random
 from typing import Any
@@ -18,7 +19,12 @@ from core.common.config import CoralConfig
 from core.domain.ca import CASeed
 from core.domain.genome import Genome
 from core.domain.mapping import LoRAConfig
+from core.domain.proof import (
+    validate_proof_execution_policy,
+    validate_proof_quality,
+)
 from plugins.gsm8k_lora.plugin import GSM8KLoRARunner, score_gsm8k_metrics
+from plugins.registry import create_plugin
 
 
 def run_gsm8k_lora_proof(
@@ -26,7 +32,26 @@ def run_gsm8k_lora_proof(
     random_trials: int | None = None,
     output_path: Path | None = None,
 ) -> dict[str, Any]:
-    """Run evolution plus fixed/random controls for the GSM8K LoRA target."""
+    """Run all configured proof seeds and write an aggregate GSM8K LoRA report."""
+    started_at = time.time()
+    seed_reports = [
+        _run_gsm8k_lora_single_seed_proof(seed_config, random_trials)
+        for seed_config in _proof_seed_configs(config)
+    ]
+    report = _aggregate_gsm8k_lora_seed_reports(config, seed_reports, started_at)
+
+    destination = output_path or (config.execution.output_dir / "proof_report.json")
+    report["artifacts"]["proof_report"] = str(destination)
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(json.dumps(report, indent=2, sort_keys=True, default=str))
+    return report
+
+
+def _run_gsm8k_lora_single_seed_proof(
+    config: CoralConfig,
+    random_trials: int | None = None,
+) -> dict[str, Any]:
+    """Run evolution plus fixed/random controls for one GSM8K LoRA proof seed."""
     if config.experiment.target != "gsm8k_lora":
         raise ValueError(
             "The proof command currently supports experiment.target='gsm8k_lora' only"
@@ -35,7 +60,7 @@ def run_gsm8k_lora_proof(
     started_at = time.time()
     candidate_jsonl = config.execution.output_dir / "candidate_evaluations.jsonl"
     candidate_jsonl_start = _file_size(candidate_jsonl)
-    services = create_evolution_services(config)
+    services = create_evolution_services(config, plugin=create_plugin(config))
     orchestrator = EvolutionOrchestrator(services)
     evolution_result = asyncio.run(orchestrator.run_evolution())
     if evolution_result.status != "completed":
@@ -84,6 +109,15 @@ def run_gsm8k_lora_proof(
         start_offset=candidate_jsonl_start,
     )
     random_best = max(random_records, key=lambda row: row["fitness"], default=None)
+    if evolution_best is None:
+        raise RuntimeError("FAIL-FAST: proof requires an evolved best genome")
+    held_out_record = _evaluate_candidate(
+        config,
+        services.model_factory,
+        _held_out_problem(problem),
+        _lora_config_from_record(evolution_best["lora"]),
+        candidate_id="held_out_evolved_best",
+    )
 
     report = {
         "target": config.experiment.target,
@@ -116,6 +150,7 @@ def run_gsm8k_lora_proof(
             "evolution_population_size": config.execution.population_size,
             "random_trials": len(random_records),
         },
+        "seeds": [config.seed],
         "evolution": {
             "status": evolution_result.status,
             "generations_completed": evolution_result.generations_completed,
@@ -137,17 +172,97 @@ def run_gsm8k_lora_proof(
             ),
             "trials": random_records,
         },
+        "held_out": held_out_record,
         "interpretation": _interpret(
             evolution_best, base_record, fixed_record, random_best
         ),
         "artifacts": {"candidate_jsonl": str(candidate_jsonl)},
     }
 
-    destination = output_path or (config.execution.output_dir / "proof_report.json")
+    destination = config.execution.output_dir / "proof_report.json"
     report["artifacts"]["proof_report"] = str(destination)
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(json.dumps(report, indent=2, sort_keys=True, default=str))
     return report
+
+
+def _aggregate_gsm8k_lora_seed_reports(
+    config: CoralConfig,
+    seed_reports: list[dict[str, Any]],
+    started_at: float,
+) -> dict[str, Any]:
+    """Aggregate single-seed proof reports into one framework-level proof report."""
+    if not seed_reports:
+        raise ValueError("FAIL-FAST: proof aggregation requires at least one seed report")
+
+    base = _mean_fitness_record(
+        [report["base_model_baseline"] for report in seed_reports],
+        "base_model_mean",
+    )
+    fixed = _mean_fitness_record(
+        [report["fixed_baseline"] for report in seed_reports],
+        "fixed_baseline_mean",
+    )
+    random_best = _mean_fitness_record(
+        [report["random_baseline"]["best"] for report in seed_reports],
+        "random_best_mean",
+    )
+    evolution_best = _mean_fitness_record(
+        [report["evolution"]["best"] for report in seed_reports],
+        "evolution_best_mean",
+    )
+    held_out = _mean_fitness_record(
+        [report["held_out"] for report in seed_reports],
+        "held_out_evolved_mean",
+    )
+    report = {
+        "target": config.experiment.target,
+        "experiment": config.experiment.name,
+        "model": config.experiment.model.name,
+        "dataset": "openai/gsm8k",
+        "started_at": started_at,
+        "total_seconds": time.time() - started_at,
+        "seeds": [report["seeds"][0] for report in seed_reports],
+        "seed_runs": seed_reports,
+        "budget": {
+            "evolution_generations": config.execution.generations,
+            "evolution_population_size": config.execution.population_size,
+            "random_trials_per_seed": len(seed_reports[0]["random_baseline"]["trials"]),
+        },
+        "evolution": {
+            "status": "completed",
+            "best": evolution_best,
+            "best_by_fitness": evolution_best,
+        },
+        "base_model_baseline": base,
+        "fixed_baseline": fixed,
+        "random_baseline": {
+            "best": random_best,
+            "trials_by_seed": [
+                report["random_baseline"]["trials"] for report in seed_reports
+            ],
+        },
+        "held_out": held_out,
+        "artifacts": {
+            "seed_reports": [
+                report["artifacts"]["proof_report"] for report in seed_reports
+            ]
+        },
+    }
+    report["proof_quality"] = _proof_quality_summary(report)
+    return report
+
+
+def _mean_fitness_record(records: list[dict[str, Any]], candidate_id: str) -> dict[str, Any]:
+    """Return a mean-fitness summary for equivalent records across proof seeds."""
+    if not records:
+        raise ValueError("FAIL-FAST: cannot aggregate empty proof record list")
+    fitness_values = [float(record["fitness"]) for record in records]
+    return {
+        "candidate_id": candidate_id,
+        "fitness": sum(fitness_values) / len(fitness_values),
+        "seed_records": records,
+    }
 
 
 def _base_model_config() -> LoRAConfig:
@@ -220,6 +335,17 @@ def _evaluate_candidate(
     }
 
 
+def _held_out_problem(problem: dict[str, Any]) -> dict[str, Any]:
+    """Return a problem payload that evaluates against held-out rows."""
+    held_out_rows = problem.get("held_out")
+    if not held_out_rows:
+        raise ValueError("FAIL-FAST: proof mode requires plugin-provided held_out rows")
+    return {
+        **problem,
+        "eval": list(held_out_rows),
+    }
+
+
 def _best_genome_record(genome: Genome | None) -> dict[str, Any] | None:
     if genome is None:
         return None
@@ -239,6 +365,16 @@ def _lora_record(lora_cfg: LoRAConfig) -> dict[str, Any]:
         "target_modules": list(lora_cfg.target_modules),
         "adapter_type": lora_cfg.adapter_type,
     }
+
+
+def _lora_config_from_record(record: dict[str, Any]) -> LoRAConfig:
+    return LoRAConfig(
+        r=int(record["r"]),
+        alpha=float(record["alpha"]),
+        dropout=float(record["dropout"]),
+        target_modules=tuple(record["target_modules"]),
+        adapter_type=str(record["adapter_type"]),
+    )
 
 
 def _median(values: list[float]) -> float | None:
@@ -314,6 +450,55 @@ def _exact_accuracy(record: dict[str, Any] | None) -> float | None:
         return None
     value = metrics.get("exact_accuracy")
     return float(value) if value is not None else None
+
+
+def _proof_quality_summary(report: dict[str, Any]) -> dict[str, Any]:
+    """Return a machine-checkable summary of whether a report supports a strong claim."""
+    verdict = validate_proof_quality(
+        {
+            "base": _required_report_value(report, "base_model_baseline"),
+            "fixed": _required_report_value(report, "fixed_baseline"),
+            "random": _required_report_value(report, "random_baseline", "best"),
+            "evolved": _required_report_value(report, "evolution", "best"),
+            "held_out": _required_report_value(report, "held_out"),
+            "seeds": _required_report_value(report, "seeds"),
+        }
+    )
+    return asdict(verdict)
+
+
+def _required_report_value(report: dict[str, Any], *path: str) -> Any:
+    current: Any = report
+    for key in path:
+        if not isinstance(current, dict) or key not in current:
+            raise ValueError(
+                "FAIL-FAST: proof report missing required field "
+                + ".".join(path)
+            )
+        current = current[key]
+    return current
+
+
+def _validate_proof_execution_policy(config: CoralConfig) -> tuple[int, ...]:
+    """Validate framework-level proof execution requirements."""
+    return validate_proof_execution_policy(config)
+
+
+def _proof_seed_configs(config: CoralConfig) -> tuple[CoralConfig, ...]:
+    """Return isolated configs for each configured proof seed."""
+    proof_seeds = _validate_proof_execution_policy(config)
+    configs = []
+    base_output_dir = config.execution.output_dir
+    base_artifacts_dir = config.cache.artifacts_dir
+    base_run_id = config.cache.run_id or "proof"
+    for seed in proof_seeds:
+        payload = config.model_dump(mode="python")
+        payload["seed"] = seed
+        payload["execution"]["output_dir"] = base_output_dir / f"seed_{seed}"
+        payload["cache"]["artifacts_dir"] = base_artifacts_dir / f"seed_{seed}"
+        payload["cache"]["run_id"] = f"{base_run_id}_seed_{seed}"
+        configs.append(CoralConfig.model_validate(payload))
+    return tuple(configs)
 
 
 def _best_evolution_candidate_by_exact_accuracy(

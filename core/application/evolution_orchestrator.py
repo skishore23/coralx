@@ -9,7 +9,7 @@ from ..common.config import CoralConfig
 from ..common.exceptions import EvolutionError
 from ..common.logging import LoggingMixin
 from ..domain.genome import Genome
-from ..domain.mapping import LoRAConfig
+from ..domain.mapping import AdapterConfig
 from ..domain.neat import Population
 from ..domain.stable_hash import stable_digest
 from ..ports.interfaces import DatasetProvider, Executor, FitnessFn, ModelRunner
@@ -40,7 +40,7 @@ class EvolutionServices:
     executor: Executor
     config: CoralConfig
     dataset_provider: DatasetProvider | None = None
-    model_factory: Callable[[LoRAConfig, Genome | None], ModelRunner] | None = None
+    model_factory: Callable[[AdapterConfig, Genome | None], ModelRunner] | None = None
 
 
 class EvolutionOrchestrator(LoggingMixin):
@@ -272,16 +272,27 @@ class EvolutionOrchestrator(LoggingMixin):
                 # 3. Calculating fitness scores
 
                 # Get multi-objective evaluation
+                evaluation_result = self.services.executor.submit(
+                    self._evaluate_single_genome_with_scores_sync, genome
+                )
+                if not evaluation_result.is_successful():
+                    raise RuntimeError(
+                        evaluation_result.error
+                        or f"Executor failed evaluating genome {genome.id}"
+                    )
                 (
                     fitness_scores,
                     multi_scores,
                     evaluation_metadata,
-                ) = await self._evaluate_single_genome_with_scores(genome)
+                ) = evaluation_result.result
 
                 # Create evaluated genome with both fitness and multi-objective scores
                 evaluated_genome = genome.with_fitness(
                     fitness_scores
-                ).with_multi_scores(multi_scores)
+                ).with_multi_scores(
+                    multi_scores,
+                    weights=self.config.evaluation.fitness_weights.to_dict(),
+                )
                 if evaluation_metadata:
                     evaluated_genome = evaluated_genome.with_metadata(
                         {
@@ -334,6 +345,10 @@ class EvolutionOrchestrator(LoggingMixin):
         Returns:
             Tuple of (fitness_score, multi_objective_scores)
         """
+        return self._evaluate_single_genome_with_scores_sync(genome)
+
+    def _evaluate_single_genome_with_scores_sync(self, genome: Genome):
+        """Synchronous evaluation body submitted through the configured executor."""
         try:
             if not self.services.model_factory or not self.services.dataset_provider:
                 raise EvolutionError("Dataset provider and model factory are required")
@@ -347,8 +362,8 @@ class EvolutionOrchestrator(LoggingMixin):
             )
             evaluation_metadata = self._extract_evaluation_metadata(model_runner)
 
-            # Get overall fitness from multi-objective scores
-            fitness = multi_scores.overall_fitness()
+            weights = self.config.evaluation.fitness_weights.to_dict()
+            fitness = multi_scores.overall_fitness(weights=weights)
 
             self.logger.debug(
                 f"Genome evaluated with multi-scores: {genome.id}, fitness: {fitness:.4f}"

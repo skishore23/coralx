@@ -10,7 +10,8 @@ execution:
   selection_mode: tournament
   survival_rate: 0.5
   crossover_rate: 0.0
-  run_held_out_benchmark: false
+  run_held_out_benchmark: true
+  proof_seeds: [42, 43, 44]
 
 evo:
   ca:

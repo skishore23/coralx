@@ -241,6 +241,21 @@ class TestGeneticOperationsService:
         assert offspring
         assert all(genome.run_id == "proof-run" for genome in offspring)
 
+    def test_mutation_failure_raises_instead_of_skipping(self, monkeypatch):
+        """Genetic operation failures should fail the run, not silently drop offspring."""
+        config = create_test_config()
+        config.execution.crossover_rate = 0.0
+        service = GeneticOperationsService(config, 42)
+        survivors = Population(create_test_population(2).genomes)
+
+        def fail_mutation(*args, **kwargs):
+            raise RuntimeError("mutation exploded")
+
+        monkeypatch.setattr("core.services.genetic_operations.mutate", fail_mutation)
+
+        with pytest.raises(Exception, match="mutation exploded"):
+            service.reproduce_population(survivors, target_size=4, generation=0)
+
 
 class TestProgressTracker:
     """Test ProgressTracker service."""

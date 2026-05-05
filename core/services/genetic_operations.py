@@ -87,21 +87,19 @@ class GeneticOperationsService(LoggingMixin):
             if self.random.random() < self.crossover_rate and survivors.size() >= 2:
                 # Perform crossover
                 offspring = self._perform_crossover(survivors, generation)
-                if offspring:
-                    new_genomes.append(offspring)
-                    crossovers_performed += 1
-                    self.logger.debug(
-                        f"Crossover performed: generation={generation}, parent_count=2, offspring_id={offspring.id}"
-                    )
+                new_genomes.append(offspring)
+                crossovers_performed += 1
+                self.logger.debug(
+                    f"Crossover performed: generation={generation}, parent_count=2, offspring_id={offspring.id}"
+                )
             else:
                 # Perform mutation
                 offspring = self._perform_mutation(survivors, generation)
-                if offspring:
-                    new_genomes.append(offspring)
-                    mutations_performed += 1
-                    self.logger.debug(
-                        f"Mutation performed: generation={generation}, offspring_id={offspring.id}"
-                    )
+                new_genomes.append(offspring)
+                mutations_performed += 1
+                self.logger.debug(
+                    f"Mutation performed: generation={generation}, offspring_id={offspring.id}"
+                )
 
         # Trim to exact target size if we overshot
         if len(new_genomes) > target_size:
@@ -123,7 +121,7 @@ class GeneticOperationsService(LoggingMixin):
 
     def _perform_crossover(
         self, population: Population, generation: int
-    ) -> Genome | None:
+    ) -> Genome:
         """Perform crossover between two randomly selected parents.
 
         Args:
@@ -131,7 +129,7 @@ class GeneticOperationsService(LoggingMixin):
             generation: Current generation number
 
         Returns:
-            Offspring genome or None if crossover failed
+            Offspring genome.
         """
         try:
             # Select two different parents
@@ -173,11 +171,13 @@ class GeneticOperationsService(LoggingMixin):
             self.logger.error(
                 f"Crossover failed: generation={generation}, error={str(e)}"
             )
-            return None
+            raise GeneticOperationError(
+                f"FAIL-FAST: crossover failed in generation {generation}: {e}"
+            ) from e
 
     def _perform_mutation(
         self, population: Population, generation: int
-    ) -> Genome | None:
+    ) -> Genome:
         """Perform mutation on a randomly selected parent.
 
         Args:
@@ -185,7 +185,7 @@ class GeneticOperationsService(LoggingMixin):
             generation: Current generation number
 
         Returns:
-            Mutated genome or None if mutation failed
+            Mutated genome.
         """
         try:
             # Select random parent
@@ -210,8 +210,7 @@ class GeneticOperationsService(LoggingMixin):
                 run_id=run_id,
             )
 
-            # Determine mutation type based on whether CA or LoRA was mutated
-            mutation_type = "ca_mutation"  # Default assumption - could be enhanced to detect actual type
+            mutation_type = "ca_mutation"
 
             # Track the mutation operation
             self.genetic_tracker.track_mutation(
@@ -228,7 +227,9 @@ class GeneticOperationsService(LoggingMixin):
             self.logger.error(
                 f"Mutation failed: generation={generation}, error={str(e)}"
             )
-            return None
+            raise GeneticOperationError(
+                f"FAIL-FAST: mutation failed in generation {generation}: {e}"
+            ) from e
 
     def calculate_diversity_strength(self, population: Population) -> float:
         """Calculate diversity strength for adaptive genetic operations.
@@ -255,7 +256,7 @@ class GeneticOperationsService(LoggingMixin):
             )
             fitness_diversity = variance**0.5
 
-        # Calculate genetic diversity (LoRA parameter diversity)
+        # Calculate genetic diversity from mapped structural parameters.
         unique_ranks = set()
         unique_alphas = set()
         unique_dropouts = set()

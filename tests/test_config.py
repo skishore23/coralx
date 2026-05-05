@@ -126,7 +126,8 @@ def test_objective_thresholds_validation():
 
     # Test to_dict method
     threshold_dict = thresholds.to_dict()
-    assert threshold_dict["bugfix"] == 0.1
+    assert threshold_dict["task_score"] == 0.1
+    assert "bugfix" not in threshold_dict
     assert len(threshold_dict) == 5
 
 

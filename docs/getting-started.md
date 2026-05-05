@@ -49,7 +49,9 @@ Optional proof report with controls:
 .venv/bin/python -m core.cli.main prove --config config/examples/gsm8k_lora_micro.yaml --random-trials 4
 ```
 
-This runs evolution, a fixed LoRA baseline, and same-budget random candidates, then writes a JSON report under `artifacts/gsm8k_lora_micro/`.
+This runs evolution, a fixed LoRA baseline, and same-budget random candidates
+across the configured proof seeds, then writes a JSON report under
+`artifacts/gsm8k_lora_micro/`.
 
 Stronger local math benchmark:
 

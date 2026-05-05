@@ -237,17 +237,13 @@ def _mutate_ca_seed(seed: CASeed, rng: Random) -> CASeed:
 
     # Flip a small percentage of cells
     mutation_rate = 0.05
-    mask = rng.random() < mutation_rate
-    if isinstance(mask, bool):
-        # For scalar case
-        flip_positions = [
-            (
-                rng.randint(0, seed.grid.shape[0] - 1),
-                rng.randint(0, seed.grid.shape[1] - 1),
-            )
-        ]
-    else:
-        # Would need proper vectorized approach for array mask
+    flip_positions = []
+    for i in range(seed.grid.shape[0]):
+        for j in range(seed.grid.shape[1]):
+            if rng.random() < mutation_rate:
+                flip_positions.append((i, j))
+
+    if not flip_positions:
         flip_positions = [
             (
                 rng.randint(0, seed.grid.shape[0] - 1),
@@ -256,8 +252,8 @@ def _mutate_ca_seed(seed: CASeed, rng: Random) -> CASeed:
         ]
 
     for i, j in flip_positions:
-        max_state = int(np.max(new_grid)) + 1
-        new_grid[i, j] = rng.randint(0, max_state - 1)
+        max_state = max(2, int(np.max(new_grid)) + 1)
+        new_grid[i, j] = (int(new_grid[i, j]) + 1) % max_state
 
     # Possibly mutate rule
     new_rule = seed.rule

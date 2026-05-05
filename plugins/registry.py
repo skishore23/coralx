@@ -42,6 +42,16 @@ def create_plugin(config: CoralConfig) -> Plugin:
 
         return GSM8KLoRAPlugin(_config_dict(config))
 
+    if target == "gsm8k_prompt_evolution":
+        from plugins.gsm8k_prompt_evolution.plugin import GSM8KPromptEvolutionPlugin
+
+        return GSM8KPromptEvolutionPlugin(_config_dict(config))
+
+    if target == "sticker_lora_comfy":
+        from plugins.sticker_lora_comfy.plugin import StickerLoRAComfyPlugin
+
+        return StickerLoRAComfyPlugin(_config_dict(config))
+
     supported = supported_targets()
     raise ValueError(
         f"Unsupported experiment target '{target}'. Supported targets: {', '.join(supported)}"
@@ -56,4 +66,6 @@ def supported_targets() -> tuple[str, ...]:
         "quixbugs_gemma4",
         "ca_onemax",
         "gsm8k_lora",
+        "gsm8k_prompt_evolution",
+        "sticker_lora_comfy",
     )
