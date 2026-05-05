@@ -31,9 +31,12 @@ class GSM8KLoRASettings:
     """Runtime settings for the GSM8K LoRA micro benchmark."""
 
     model_name: str
+    model_revision: str
+    dataset_revision: str
     max_seq_length: int
     train_samples: int
     eval_samples: int
+    held_out_samples: int
     max_train_steps: int
     max_new_tokens: int
     loss_weight: float
@@ -93,10 +96,9 @@ def _optional_ml_imports() -> dict[str, Any]:
     """Import optional ML dependencies with a clear error message."""
     try:
         import torch
+        from datasets import load_dataset
         from peft import LoraConfig, TaskType, get_peft_model
         from transformers import AutoModelForCausalLM, AutoTokenizer
-
-        from datasets import load_dataset
     except Exception as exc:  # pragma: no cover - exercised only with missing extras
         raise RuntimeError(
             "The gsm8k_lora target requires optional ML dependencies. "
@@ -121,6 +123,7 @@ def _settings(config: dict[str, Any]) -> GSM8KLoRASettings:
     execution = config.get("execution", {}) or {}
     cache = config.get("cache", {}) or {}
     model = experiment.get("model", {}) or {}
+    dataset = experiment.get("dataset", {}) or {}
 
     output_dir = Path(
         str(execution.get("output_dir") or cache.get("artifacts_dir") or "./artifacts")
@@ -128,9 +131,14 @@ def _settings(config: dict[str, Any]) -> GSM8KLoRASettings:
 
     return GSM8KLoRASettings(
         model_name=str(model.get("name", "Qwen/Qwen2.5-0.5B-Instruct")),
+        model_revision=str(model.get("revision") or "main"),
+        dataset_revision=str(
+            dataset.get("revision") or evaluation.get("dataset_revision") or "main"
+        ),
         max_seq_length=int(model.get("max_seq_length", 384)),
         train_samples=int(evaluation.get("train_samples", 32)),
         eval_samples=int(evaluation.get("eval_samples", 16)),
+        held_out_samples=int(evaluation.get("held_out_samples", 16)),
         max_train_steps=int(evaluation.get("max_train_steps", 20)),
         max_new_tokens=int(evaluation.get("max_new_tokens", 64)),
         loss_weight=float(evaluation.get("loss_weight", 1.0)),
@@ -229,12 +237,19 @@ class GSM8KLoRADataset(DatasetProvider):
         deps = _optional_ml_imports()
         load_dataset = deps["load_dataset"]
 
-        dataset = load_dataset("openai/gsm8k", "main")
+        dataset = load_dataset(
+            "openai/gsm8k",
+            "main",
+            revision=self.settings.dataset_revision,
+        )
         train_split = dataset["train"].shuffle(seed=self.settings.seed)
         eval_split = dataset["test"].shuffle(seed=self.settings.seed + 1)
 
         train_count = min(self.settings.train_samples, len(train_split))
         eval_count = min(self.settings.eval_samples, len(eval_split))
+        held_out_count = min(
+            self.settings.held_out_samples, max(0, len(eval_split) - eval_count)
+        )
 
         train_rows = [
             {
@@ -252,12 +267,21 @@ class GSM8KLoRADataset(DatasetProvider):
             }
             for row in eval_split.select(range(eval_count))
         ]
+        held_out_rows = [
+            {
+                "question": row["question"],
+                "answer": row["answer"],
+                "final_answer": _extract_final_answer(row["answer"]),
+            }
+            for row in eval_split.select(range(eval_count, eval_count + held_out_count))
+        ]
 
         yield {
             "name": "gsm8k_lora",
             "dataset": "openai/gsm8k",
             "train": train_rows,
             "eval": eval_rows,
+            "held_out": held_out_rows,
         }
 
 
@@ -343,6 +367,8 @@ class GSM8KLoRARunner(ModelRunner):
         payload = {
             "target": "gsm8k_lora",
             "model": self.settings.model_name,
+            "model_revision": self.settings.model_revision,
+            "dataset_revision": self.settings.dataset_revision,
             "max_seq_length": self.settings.max_seq_length,
             "train_samples": len(train_rows),
             "eval_samples": len(eval_rows),
@@ -435,11 +461,17 @@ class GSM8KLoRARunner(ModelRunner):
         self._set_torch_seed(torch)
         device = self._resolve_device(torch)
 
-        tokenizer = AutoTokenizer.from_pretrained(self.settings.model_name)
+        tokenizer = AutoTokenizer.from_pretrained(
+            self.settings.model_name,
+            revision=self.settings.model_revision,
+        )
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
 
-        model = AutoModelForCausalLM.from_pretrained(self.settings.model_name)
+        model = AutoModelForCausalLM.from_pretrained(
+            self.settings.model_name,
+            revision=self.settings.model_revision,
+        )
         model.config.pad_token_id = tokenizer.pad_token_id
 
         if self.lora_cfg.adapter_type == "lora":
@@ -724,11 +756,11 @@ class GSM8KLoRAFitness(FitnessFn):
         )
 
         return MultiObjectiveScores(
-            bugfix=score,
-            style=score,
-            security=score,
-            runtime=score,
-            syntax=score,
+            task_score=metrics.exact_accuracy,
+            quality_score=metrics.formatted_answer_rate,
+            risk_score=1.0,
+            efficiency_score=metrics.loss_score,
+            validity_score=metrics.formatted_answer_rate,
         )
 
 

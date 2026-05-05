@@ -1,8 +1,12 @@
 """Service factory and dependency injection for CORAL-X."""
 
+from collections.abc import Callable
+
 from ..common.config import CoralConfig
 from ..common.logging import get_logger
-from ..ports.interfaces import Executor, FitnessFn, Plugin
+from ..domain.genome import Genome
+from ..domain.mapping import AdapterConfig
+from ..ports.interfaces import DatasetProvider, Executor, FitnessFn, ModelRunner, Plugin
 from ..services.genetic_operations import GeneticOperationsService
 from ..services.population_manager import PopulationManager
 from ..services.progress_tracker import ProgressTracker
@@ -14,6 +18,9 @@ def create_evolution_services(
     fitness_fn: FitnessFn | None = None,
     executor: Executor | None = None,
     run_id: str | None = None,
+    plugin: Plugin | None = None,
+    dataset_provider: DatasetProvider | None = None,
+    model_factory: Callable[[AdapterConfig, Genome | None], ModelRunner] | None = None,
 ) -> EvolutionServices:
     """Create evolution services with dependency injection.
 
@@ -22,21 +29,32 @@ def create_evolution_services(
         fitness_fn: Fitness function (optional, will create default if None)
         executor: Executor (optional, will create default if None)
         run_id: Run identifier (optional)
+        plugin: Target plugin dependency used to supply dataset/model/fitness
+        dataset_provider: Explicit dataset provider override
+        model_factory: Explicit model factory override
 
     Returns:
         EvolutionServices container with all dependencies
     """
     logger = get_logger(__name__)
-    plugin = create_plugin(config)
 
     # Create core services
     population_manager = PopulationManager(config, config.seed)
     genetic_operations = GeneticOperationsService(config, config.seed)
     progress_tracker = ProgressTracker(config, run_id)
 
-    # Create fitness function if not provided
-    if fitness_fn is None:
+    if plugin is not None and fitness_fn is None:
         fitness_fn = plugin.fitness_fn()
+    if plugin is not None and dataset_provider is None:
+        dataset_provider = plugin.dataset()
+    if plugin is not None and model_factory is None:
+        model_factory = plugin.model_factory()
+
+    if fitness_fn is None or dataset_provider is None or model_factory is None:
+        raise ValueError(
+            "create_evolution_services requires a plugin or explicit "
+            "fitness_fn, dataset_provider, and model_factory dependencies"
+        )
 
     # Create executor if not provided
     if executor is None:
@@ -52,21 +70,16 @@ def create_evolution_services(
         progress_tracker=progress_tracker,
         fitness_fn=fitness_fn,
         executor=executor,
-        dataset_provider=plugin.dataset(),
-        model_factory=plugin.model_factory(),
+        dataset_provider=dataset_provider,
+        model_factory=model_factory,
         config=config,
     )
 
 
-def create_plugin(config: CoralConfig) -> Plugin:
-    """Create the configured experiment plugin."""
-    from plugins.registry import create_plugin as create_registered_plugin
-
-    return create_registered_plugin(config)
-
-
 def create_fitness_function(
-    config: CoralConfig, run_id: str | None = None
+    config: CoralConfig,
+    run_id: str | None = None,
+    plugin: Plugin | None = None,
 ) -> FitnessFn:
     """Create fitness function based on configuration.
 
@@ -78,7 +91,8 @@ def create_fitness_function(
         Fitness function implementation
     """
     logger = get_logger(__name__)
-    plugin = create_plugin(config)
+    if plugin is None:
+        raise ValueError("create_fitness_function requires a plugin dependency")
     fitness_fn = plugin.fitness_fn()
     logger.info(
         f"Fitness function created: target={config.experiment.target}, type={type(fitness_fn).__name__}"
@@ -101,9 +115,11 @@ def create_executor(config: CoralConfig) -> Executor:
     executor_type = config.infra.executor
 
     if executor_type == "local":
-        from infra.executors.local import LocalExecutor
+        from infra.executors.local import LocalExecutor, LocalExecutorConfig
 
-        executor = LocalExecutor()
+        executor = LocalExecutor(
+            LocalExecutorConfig(max_workers=config.execution.max_workers)
+        )
     else:
         raise ValueError(f"Unknown executor type: {executor_type}")
 
@@ -126,8 +142,13 @@ class ServiceContainer:
 
     def evolution_services(
         self,
+        plugin: Plugin | None = None,
         fitness_fn: FitnessFn | None = None,
         executor: Executor | None = None,
+        dataset_provider: DatasetProvider | None = None,
+        model_factory: (
+            Callable[[AdapterConfig, Genome | None], ModelRunner] | None
+        ) = None,
         run_id: str | None = None,
     ) -> EvolutionServices:
         """Get evolution services (lazy-loaded).
@@ -142,7 +163,13 @@ class ServiceContainer:
         """
         if self._evolution_services is None:
             self._evolution_services = create_evolution_services(
-                self.config, fitness_fn, executor, run_id
+                self.config,
+                plugin=plugin,
+                fitness_fn=fitness_fn,
+                executor=executor,
+                dataset_provider=dataset_provider,
+                model_factory=model_factory,
+                run_id=run_id,
             )
 
         return self._evolution_services

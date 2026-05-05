@@ -133,6 +133,7 @@ class ConfigManager:
         env_mappings = {
             "CORAL_POPULATION_SIZE": ("execution", "population_size"),
             "CORAL_GENERATIONS": ("execution", "generations"),
+            "CORAL_MAX_WORKERS": ("execution", "max_workers"),
             "CORAL_SEED": ("seed",),
             "CORAL_OUTPUT_DIR": ("execution", "output_dir"),
             "CORAL_ARTIFACTS_DIR": ("cache", "artifacts_dir"),

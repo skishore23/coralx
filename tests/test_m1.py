@@ -18,6 +18,7 @@ from core.services.jsonl_logger import JSONLLogger
 from core.services.reproducibility import ReproducibilityManager
 from plugins.fakenews_mini.plugin import FakeNewsMiniPlugin
 from plugins.quixbugs_mini.plugin import QuixBugsMiniPlugin
+from plugins.registry import create_plugin
 
 
 def test_m1_pipeline():
@@ -111,7 +112,7 @@ def test_m1_pipeline():
     print("-" * 30)
 
     try:
-        services = create_evolution_services(config)
+        services = create_evolution_services(config, plugin=create_plugin(config))
         print("✅ Evolution services created")
         print(f"   • Population manager: {type(services.population_manager).__name__}")
         print(f"   • Genetic operations: {type(services.genetic_operations).__name__}")

@@ -17,6 +17,7 @@ from core.common.config_loader import load_config
 from core.domain.genome import Genome, MultiObjectiveScores
 from core.domain.neat import Population
 from core.services.pareto.selection import nsga2_select
+from plugins.registry import create_plugin
 
 
 def _calculate_hypervolume(population: Population) -> float:
@@ -28,16 +29,8 @@ def _calculate_hypervolume(population: Population) -> float:
     totals = []
     for genome in evaluated:
         scores = genome.multi_scores
-        totals.append(
-            (
-                scores.bugfix
-                + scores.style
-                + scores.security
-                + scores.runtime
-                + scores.syntax
-            )
-            / 5
-        )
+        values = tuple(scores.to_dict().values())
+        totals.append(sum(values) / len(values))
     return sum(totals) / len(totals)
 
 
@@ -206,7 +199,7 @@ class TestEvolutionLoop:
         config = load_config(config_path)
 
         # Create evolution services
-        services = create_evolution_services(config)
+        services = create_evolution_services(config, plugin=create_plugin(config))
 
         # Create orchestrator
         orchestrator = EvolutionOrchestrator(services)

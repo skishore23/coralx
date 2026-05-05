@@ -14,23 +14,22 @@ from .genome import Genome, MultiObjectiveScores
 
 @dataclass(frozen=True)
 class ObjectiveThresholds:
-    """Multi-objective threshold configuration."""
+    """Target-neutral threshold configuration."""
 
-    bugfix: float
-    style: float
-    security: float
-    runtime: float
-    syntax: float  # NEW: Syntax correctness objective
+    task_score: float | None = None
+    quality_score: float | None = None
+    risk_score: float | None = None
+    efficiency_score: float | None = None
+    validity_score: float | None = None
+    bugfix: float | None = None
+    style: float | None = None
+    security: float | None = None
+    runtime: float | None = None
+    syntax: float | None = None
 
     def to_dict(self) -> dict[str, float]:
         """Convert to dictionary for easier iteration."""
-        return {
-            "bugfix": self.bugfix,
-            "style": self.style,
-            "security": self.security,
-            "runtime": self.runtime,
-            "syntax": self.syntax,
-        }
+        return _neutral_threshold_dict(self)
 
 
 @dataclass(frozen=True)
@@ -66,12 +65,12 @@ def calculate_sigma(gen: int, max_gen: int, mode: str = "sigmoid") -> float:
 
 
 def get_sla_targets() -> dict[str, float]:
-    """Get SLA targets from CORAL-X architecture specification."""
+    """Get default target-neutral objective targets."""
     return {
-        "bugfix": 0.90,  # Architecture: ≥ 0.90 BugFix rate at MAX_GEN
-        "style": 0.97,  # Architecture: ≥ 0.97 Style score
-        "security": 1.0,  # Architecture: 1.0 Security flag (no security issues)
-        "runtime": 0.90,  # Architecture: ≥ 0.90 Runtime speed‑up
+        "task_score": 0.90,
+        "quality_score": 0.97,
+        "risk_score": 1.0,
+        "efficiency_score": 0.90,
     }
 
 
@@ -129,3 +128,33 @@ def filter_population_by_thresholds(
             survivors.append(genome)
 
     return survivors
+
+
+def _neutral_threshold_dict(thresholds: ObjectiveThresholds) -> dict[str, float]:
+    values = {
+        "task_score": _coalesce_threshold(thresholds.task_score, thresholds.bugfix),
+        "quality_score": _coalesce_threshold(
+            thresholds.quality_score, thresholds.style
+        ),
+        "risk_score": _coalesce_threshold(thresholds.risk_score, thresholds.security),
+        "efficiency_score": (
+            thresholds.efficiency_score
+            if thresholds.efficiency_score is not None
+            else thresholds.runtime
+        ),
+        "validity_score": (
+            thresholds.validity_score
+            if thresholds.validity_score is not None
+            else thresholds.syntax
+        ),
+    }
+    missing = tuple(key for key, value in values.items() if value is None)
+    if missing:
+        raise ValueError(
+            "FAIL-FAST: missing threshold objective fields: " + ", ".join(missing)
+        )
+    return {key: float(value) for key, value in values.items()}
+
+
+def _coalesce_threshold(neutral: float | None, legacy: float | None) -> float | None:
+    return neutral if neutral is not None else legacy

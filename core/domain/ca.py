@@ -52,7 +52,8 @@ def next_step(grid: NDArray[np.int_], rule: int) -> NDArray[np.int_]:
             neighbor_config = 0
             bit_pos = 0
 
-            # Moore neighborhood: 8 neighbors + center
+            # Moore neighborhood: 8 neighbors + center. The center bit is stored
+            # separately in the rule index, so it is not counted as a live neighbor.
             for di in [-1, 0, 1]:
                 for dj in [-1, 0, 1]:
                     ni, nj = (i + di) % height, (j + dj) % width
@@ -73,9 +74,9 @@ def _apply_rule_fixed(neighbor_config: int, rule: int) -> int:
     Uses rule number directly in bit-based lookup for elementary CA behavior.
     No hardcoded mappings, no fallbacks - pure functional approach.
     """
-    # Count live neighbors (exclude center cell)
-    live_neighbors = bin(neighbor_config).count("1")
     center_alive = (neighbor_config >> 4) & 1
+    # Count live neighbors, excluding the center cell.
+    live_neighbors = bin(neighbor_config & ~(1 << 4)).count("1")
 
     # Use rule number as bit pattern for elementary CA
     # Rule number encodes all possible neighborhood states
@@ -85,6 +86,5 @@ def _apply_rule_fixed(neighbor_config: int, rule: int) -> int:
     # Combine center state and neighbor count for rule lookup
     config_index = (center_alive << 3) | min(live_neighbors, 7)
 
-    # Apply rule by checking corresponding bit
-    # Each rule number is treated as 8-bit pattern
+    # Apply rule by checking corresponding bit.
     return (rule >> config_index) & 1

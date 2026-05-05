@@ -1,35 +1,43 @@
 # CoralX Dependencies
+# Prefer `pip install -e ".[dev]"` or `pip install -e ".[ml]"`.
+# This file is kept for legacy `pip install -r requirements.txt` workflows and
+# should mirror the dependency floors in pyproject.toml where packages overlap.
+
 # Core scientific computing
 numpy>=1.20.0,<2.0.0  # Pin to 1.x for PyTorch compatibility
 scipy>=1.7.0
 
 # Configuration and data handling
 pyyaml>=5.4.0
+pydantic>=2.0.0
 
 # Modal and distributed computing
 modal>=0.50.0
 
 # ML model support
-torch>=2.1.0
-transformers>=4.36.0
-peft>=0.7.0
-accelerate>=0.25.0
-datasets>=2.14.0
+torch>=2.4
+torchvision>=0.19
+transformers>=5.6.0
+peft>=0.18.0
+accelerate>=1.13.0
+datasets>=4.0.0
+huggingface_hub>=1.5.0
 unsloth>=2023.11
 
 # Terminal UI for dashboard
 rich>=13.0.0
+pillow>=10.0.0
 
 # Multi-objective AI safety dependencies
 scikit-learn>=1.0.0  # For AUROC, precision/recall metrics
 psutil>=5.8.0        # For memory usage monitoring
 
-# Development dependencies (optional)
-# pytest>=6.0.0
-# black>=22.0.0
-# mypy>=0.910
-
-# Real evaluation dependencies
+# Development and real evaluation dependencies
 pytest>=7.4.0      # For QuixBugs test execution
+pytest-asyncio>=0.23.0
+pytest-cov>=4.0.0
+black>=22.0.0
+ruff>=0.1.0
+mypy>=1.0.0
 flake8>=6.1.0       # For style evaluation
-bandit>=1.7.5       # For security evaluation 
+bandit>=1.9.4       # For security evaluation

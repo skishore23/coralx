@@ -2,6 +2,14 @@
 
 CORAL-X runs evolutionary adapter search through a local CLI, a plugin registry, and protocol-based orchestration.
 
+For the broader explanation of what CORAL-X is trying to prove, why benchmarks
+matter, and how the Comfy sticker work fits, see
+`docs/coralx_architecture_and_purpose.md`.
+
+For the lower-level mechanics of CA-seeded parameter mapping, NEAT-style
+mutation/crossover, selection, and the current sticker evolution script, see
+`docs/evolution_mechanics.md`.
+
 ## Boundaries
 
 - `core` owns orchestration, config, domain models, and service interfaces.

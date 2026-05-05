@@ -38,6 +38,7 @@ test_results/
 .modal
 
 # IDE & OS
+.claude/
 .vscode/
 .idea/
 .DS_Store

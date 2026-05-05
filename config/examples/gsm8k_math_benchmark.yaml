@@ -11,7 +11,8 @@ execution:
   selection_mode: tournament
   survival_rate: 0.5
   crossover_rate: 0.2
-  run_held_out_benchmark: false
+  run_held_out_benchmark: true
+  proof_seeds: [42, 43, 44]
 
 evo:
   ca:
@@ -66,11 +67,11 @@ training:
 evaluation:
   test_samples: 128
   fitness_weights:
-    bugfix: 0.2
-    style: 0.2
-    security: 0.2
-    runtime: 0.2
-    syntax: 0.2
+    task_score: 0.5
+    quality_score: 0.0
+    risk_score: 0.0
+    efficiency_score: 0.5
+    validity_score: 0.0
   baseline_testing:
     enabled: false
 

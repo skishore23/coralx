@@ -70,19 +70,134 @@ def test_adapter_parameters_validation():
 
 
 def test_multi_objective_scores():
-    """Test multi-objective scores creation."""
+    """Test target-neutral multi-objective scores creation."""
+    from core.domain.genome import MultiObjectiveScores
+
+    scores = MultiObjectiveScores(
+        task_score=0.8,
+        quality_score=0.7,
+        risk_score=0.9,
+        efficiency_score=0.6,
+        validity_score=0.85,
+    )
+
+    assert scores.task_score == 0.8
+    assert scores.overall_fitness() > 0.0
+
+    scores_dict = scores.to_dict()
+    assert "task_score" in scores_dict
+    assert "bugfix" not in scores_dict
+    assert scores_dict["task_score"] == 0.8
+
+
+def test_multi_objective_scores_accept_legacy_plugin_names_as_aliases():
+    """Legacy plugins can still pass code-repair names at the boundary."""
     from core.domain.genome import MultiObjectiveScores
 
     scores = MultiObjectiveScores(
         bugfix=0.8, style=0.7, security=0.9, runtime=0.6, syntax=0.85
     )
 
-    assert scores.bugfix == 0.8
-    assert scores.overall_fitness() > 0.0
+    assert scores.task_score == 0.8
+    assert scores.quality_score == 0.7
+    assert scores.risk_score == 0.9
+    assert scores.efficiency_score == 0.6
+    assert scores.validity_score == 0.85
+    assert scores.bugfix == scores.task_score
 
-    scores_dict = scores.to_dict()
-    assert "bugfix" in scores_dict
-    assert scores_dict["bugfix"] == 0.8
+
+def test_objective_vector_supports_target_neutral_scores():
+    """Core objective handling should not require code-repair field names."""
+    from core.domain.objectives import ObjectiveVector
+
+    scores = ObjectiveVector.from_mapping(
+        values={
+            "semantic_match": 0.8,
+            "background_plainness": 0.7,
+            "aesthetic_quality": 0.6,
+        },
+        weights={
+            "semantic_match": 0.5,
+            "background_plainness": 0.3,
+            "aesthetic_quality": 0.2,
+        },
+    )
+
+    assert scores.keys() == (
+        "semantic_match",
+        "background_plainness",
+        "aesthetic_quality",
+    )
+    assert scores.to_dict()["semantic_match"] == 0.8
+    assert scores.weighted_fitness() == pytest.approx(0.73)
+
+
+def test_objective_vector_fails_fast_on_missing_weight():
+    """Objective weights must be explicit for each target objective."""
+    from core.domain.objectives import ObjectiveVector
+
+    with pytest.raises(ValueError, match="missing weights"):
+        ObjectiveVector.from_mapping(
+            values={"exact_accuracy": 0.9, "formatting": 0.8},
+            weights={"exact_accuracy": 1.0},
+        )
+
+
+def test_legacy_multi_objective_scores_expose_generic_vector():
+    """Legacy score objects should bridge into the generic objective contract."""
+    from core.domain.genome import MultiObjectiveScores
+
+    scores = MultiObjectiveScores(
+        bugfix=0.8, style=0.7, security=0.9, runtime=0.6, syntax=0.85
+    )
+    vector = scores.as_objective_vector(
+        labels={
+            "task_score": "Task success",
+            "quality_score": "Output quality",
+            "risk_score": "Risk control",
+            "efficiency_score": "Runtime efficiency",
+            "validity_score": "Format validity",
+        }
+    )
+
+    assert vector.label_for("task_score") == "Task success"
+    assert vector.weighted_fitness() == pytest.approx(scores.overall_fitness())
+
+
+def test_proof_quality_gate_requires_all_comparative_records():
+    """Strong proof reports should require base, fixed, random, evolved, and held-out data."""
+    from core.domain.proof import validate_proof_quality
+
+    with pytest.raises(ValueError, match="held_out"):
+        validate_proof_quality(
+            {
+                "base": {"fitness": 0.4},
+                "fixed": {"fitness": 0.5},
+                "random": {"fitness": 0.6},
+                "evolved": {"fitness": 0.7},
+            }
+        )
+
+
+def test_proof_quality_gate_accepts_evolved_held_out_win():
+    """A credible proof needs evolved performance to beat fixed and random controls."""
+    from core.domain.proof import validate_proof_quality
+
+    verdict = validate_proof_quality(
+        {
+            "base": {"fitness": 0.4},
+            "fixed": {"fitness": 0.5},
+            "random": {"fitness": 0.6},
+            "evolved": {"fitness": 0.7},
+            "held_out": {"fitness": 0.65},
+            "seeds": [11, 13, 17],
+        }
+    )
+
+    assert verdict.passes
+    assert verdict.evolved_beats_fixed
+    assert verdict.evolved_beats_random
+    assert verdict.has_multi_seed_support
 
 
 def test_tournament_select_returns_unique_survivors_with_numpy_genomes():

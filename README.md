@@ -69,13 +69,17 @@ Use this for public math benchmark runs with real PEFT LoRA training. The proof 
 
 This path downloads `Qwen/Qwen2.5-0.5B-Instruct` and `openai/gsm8k`, trains one adapter per evaluated genome, and caches evaluation metrics by structural config. The micro config is sized for laptop runs; exact GSM8K accuracy may remain zero at tiny budgets.
 
-To compare the evolutionary run against fixed and random controls:
+To compare the evolutionary run against fixed and random controls, use the
+proof path. Proof configs include held-out evaluation and three configured
+seeds by default:
 
 ```bash
 .venv/bin/python -m core.cli.main prove --config config/examples/gsm8k_lora_micro.yaml --random-trials 4
 ```
 
-The proof command writes `proof_report.json` and `candidate_evaluations.jsonl` under the configured artifact directory. A local proof run on April 27, 2026 completed in 154.56s: evolution best `0.5611`, fixed baseline `0.5240`, random-control best `0.5600`, exact accuracy `0.0000`.
+The proof command writes `proof_report.json` and `candidate_evaluations.jsonl`
+under the configured artifact directory. It fails fast unless the config enables
+held-out benchmarking and at least three distinct proof seeds.
 
 For a stronger multi-hour math run on a Mac, use the math-tuned 1.5B config:
 
@@ -88,6 +92,16 @@ This downloads `Qwen/Qwen2.5-Math-1.5B-Instruct`, trains LoRA adapters on a dete
 A local run on April 27, 2026 completed in 4h33m. It did not prove improved math reasoning: base model exact accuracy was `0.8281`, evolution best exact accuracy was `0.7266`, fixed-LoRA exact accuracy was `0.6484`, and random-control best exact accuracy was also `0.7266`. The evolved adapter beat fixed LoRA on exact accuracy and blended fitness, but it did not beat the base model or random search on exact accuracy.
 
 ## Architecture
+
+For the higher-level project rationale, proof criteria, and benchmark strategy,
+see `docs/coralx_architecture_and_purpose.md`.
+
+For detailed CA, NEAT-style reproduction, selection, mutation, crossover, and
+sticker evolution mechanics, see `docs/evolution_mechanics.md`.
+
+For future coding-agent work, see `AGENTS.md`. New durable targets should be
+implemented through the CORAL-X config, registry, plugin, orchestrator, and CLI
+path rather than as script-only integrations.
 
 ```mermaid
 graph TB

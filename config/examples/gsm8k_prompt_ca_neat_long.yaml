@@ -1,0 +1,101 @@
+# CA/NEAT-only prompt evolution run for stronger local evidence.
+# Skips GEPA and hybrid so the budget goes into CA/NEAT search plus random controls.
+
+seed: 42
+
+execution:
+  generations: 3
+  population_size: 8
+  output_dir: ./artifacts/gsm8k_prompt_ca_neat_long
+  selection_mode: pareto
+  survival_rate: 0.5
+  crossover_rate: 0.2
+  run_held_out_benchmark: true
+  proof_seeds: [42, 43, 44]
+
+evo:
+  ca:
+    grid_size: [12, 12]
+    rule_range: [30, 255]
+    steps_range: [6, 18]
+    initial_density: 0.4
+  rank_candidates: [1]
+  alpha_candidates: [1]
+  dropout_candidates: [0.0]
+  target_modules: ["none"]
+
+experiment:
+  target: gsm8k_prompt_evolution
+  name: gsm8k_prompt_ca_neat_long
+  dataset:
+    path: ./datasets
+    datasets: ["openai/gsm8k"]
+    max_samples: 128
+  model:
+    name: Qwen/Qwen2.5-Math-1.5B-Instruct
+    max_seq_length: 768
+  evaluation:
+    enabled_suites: ["ca_neat"]
+    reflection_samples: 32
+    dev_samples: 32
+    test_samples: 64
+    max_new_tokens: 64
+    self_consistency_values: [1]
+    few_shot_count: 0
+    answer_format: boxed
+    use_chat_template: false
+    resume: true
+    device: auto
+
+training:
+  batch_size: 1
+  gradient_accumulation_steps: 1
+  epochs: 1
+  learning_rate: 1e-4
+  warmup_steps: 0
+  logging_steps: 1
+  save_steps: 10
+  max_grad_norm: 1.0
+  weight_decay: 0.0
+  adam_epsilon: 1e-8
+
+evaluation:
+  test_samples: 64
+  fitness_weights:
+    bugfix: 0.2
+    style: 0.2
+    security: 0.2
+    runtime: 0.2
+    syntax: 0.2
+  baseline_testing:
+    enabled: false
+
+infra:
+  executor: local
+
+cache:
+  artifacts_dir: ./artifacts/gsm8k_prompt_ca_neat_long
+  base_checkpoint: Qwen/Qwen2.5-Math-1.5B-Instruct
+  cleanup_threshold: 100
+
+cheap_knobs:
+  temperature_range: [0.0, 0.5]
+  top_p_range: [0.85, 1.0]
+  top_k_range: [20, 60]
+  repetition_penalty_range: [1.0, 1.1]
+  max_tokens_range: [32, 64]
+
+threshold:
+  base_thresholds:
+    bugfix: 0.0
+    style: 0.0
+    security: 0.0
+    runtime: 0.0
+    syntax: 0.0
+  max_thresholds:
+    bugfix: 0.0
+    style: 0.0
+    security: 0.0
+    runtime: 0.0
+    syntax: 0.0
+  schedule: linear

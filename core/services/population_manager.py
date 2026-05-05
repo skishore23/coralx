@@ -193,7 +193,7 @@ class PopulationManager(LoggingMixin):
         else:
             fitness_diversity = 0.0
 
-        # Genetic diversity (based on LoRA configurations)
+        # Genetic diversity (based on mapped structural parameters)
         unique_configs = set()
         for genome in genomes:
             if hasattr(genome, "lora_cfg") and genome.lora_cfg:
@@ -211,14 +211,7 @@ class PopulationManager(LoggingMixin):
         phenotype_vectors = []
         for genome in genomes:
             if genome.has_multi_scores():
-                scores = genome.multi_scores
-                vector = (
-                    scores.bugfix,
-                    scores.style,
-                    scores.security,
-                    scores.runtime,
-                    scores.syntax,
-                )
+                vector = tuple(genome.multi_scores.to_dict().values())
                 phenotype_vectors.append(vector)
 
         if len(phenotype_vectors) > 1:

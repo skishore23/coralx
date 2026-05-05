@@ -22,7 +22,7 @@ def main() -> None:
         help="Validate config, plugin resolution, and deterministic population creation without running evolution",
     )
     prove_parser = subparsers.add_parser(
-        "prove", help="Run GSM8K LoRA evolution with fixed/random controls"
+        "prove", help="Run GSM8K proof targets with fixed/random controls"
     )
     prove_parser.add_argument(
         "--config", type=Path, required=True, help="Config file path"
@@ -31,7 +31,7 @@ def main() -> None:
         "--random-trials",
         type=int,
         default=None,
-        help="Number of random LoRA candidates to evaluate after evolution",
+        help="Number of random candidates to evaluate after evolution",
     )
     prove_parser.add_argument(
         "--output",
@@ -67,8 +67,10 @@ def main() -> None:
             # Run evolution
             from core.application.evolution_orchestrator import EvolutionOrchestrator
             from core.application.services import create_evolution_services
+            from plugins.registry import create_plugin
 
-            services = create_evolution_services(config)
+            plugin = create_plugin(config)
+            services = create_evolution_services(config, plugin=plugin)
             orchestrator = EvolutionOrchestrator(services)
 
             import asyncio
@@ -211,11 +213,25 @@ def main() -> None:
 
         print(f"🔧 Loading config: {config_path}")
         try:
-            from core.cli.proof import run_gsm8k_lora_proof
             from core.common.config_loader import load_config
 
             config = load_config(Path(config_path))
             print(f"🔬 Starting proof run: {config.experiment.name}")
+            if config.experiment.target == "gsm8k_prompt_evolution":
+                from plugins.gsm8k_prompt_evolution.plugin import (
+                    run_gsm8k_prompt_evolution_proof,
+                )
+
+                report = run_gsm8k_prompt_evolution_proof(
+                    config,
+                    random_trials=args.random_trials,
+                    output_path=args.output,
+                )
+                _print_prompt_proof_summary(report)
+                return
+
+            from core.cli.proof import run_gsm8k_lora_proof
+
             report = run_gsm8k_lora_proof(
                 config,
                 random_trials=args.random_trials,
@@ -278,6 +294,45 @@ def _run_dry_validation(config) -> None:
     plugin = create_plugin(config)
     print(f"   Plugin: {type(plugin).__name__}")
 
+    if config.experiment.target == "gsm8k_prompt_evolution":
+        from plugins.gsm8k_prompt_evolution.plugin import (
+            _settings,
+            create_initial_prompt_population,
+        )
+
+        settings = _settings(config.model_dump(mode="json"))
+        reflection_rows = [
+            {
+                "id": f"reflection_{index}",
+                "question": f"dry-run question {index}?",
+                "answer": f"work #### {index}",
+                "final_answer": str(index),
+            }
+            for index in range(max(settings.few_shot_count, 1))
+        ]
+        first_population = create_initial_prompt_population(
+            population_size=config.execution.population_size,
+            seed=config.seed,
+            reflection_rows=reflection_rows,
+            settings=settings,
+        )
+        second_population = create_initial_prompt_population(
+            population_size=config.execution.population_size,
+            seed=config.seed,
+            reflection_rows=reflection_rows,
+            settings=settings,
+        )
+        first_keys = [genome.structural_key() for genome in first_population]
+        second_keys = [genome.structural_key() for genome in second_population]
+        if first_keys != second_keys:
+            raise RuntimeError("Deterministic prompt population check failed")
+        config.execution.output_dir.mkdir(parents=True, exist_ok=True)
+        config.cache.artifacts_dir.mkdir(parents=True, exist_ok=True)
+        print(f"   Population: {len(first_population)} deterministic prompt genomes")
+        print(f"   Output dir: {config.execution.output_dir}")
+        print(f"   Cache dir: {config.cache.artifacts_dir}")
+        return
+
     experiment_config = create_experiment_config(config.model_dump(mode="json"))
     first_population = create_initial_population(
         experiment_config,
@@ -305,6 +360,43 @@ def _run_dry_validation(config) -> None:
 def _format_optional_float(value) -> str:
     """Format optional float values for CLI summaries."""
     return "n/a" if value is None else f"{float(value):.4f}"
+
+
+def _print_prompt_proof_summary(report) -> None:
+    """Print a concise summary for prompt-evolution proof runs."""
+    exact = report["interpretation"].get("exact_accuracy", {})
+    hybrid = report.get("hybrid", {}).get("best")
+    ca_neat = report.get("ca_neat_only", {}).get("best")
+    random_best = report.get("baselines", {}).get("random", {}).get("best")
+    print("\n✅ PROMPT PROOF RUN COMPLETED")
+    if ca_neat:
+        print(
+            "   CA/NEAT best dev exact: "
+            f"{_format_optional_float(ca_neat['metrics'].get('exact_accuracy'))}"
+        )
+    if hybrid:
+        print(
+            "   Hybrid best dev exact: "
+            f"{_format_optional_float(hybrid['metrics'].get('exact_accuracy'))}"
+        )
+    if random_best:
+        print(
+            "   Random best dev exact: "
+            f"{_format_optional_float(random_best['metrics'].get('exact_accuracy'))}"
+        )
+    print(
+        "   Held-out exact accuracy: "
+        f"hybrid={_format_optional_float(exact.get('hybrid'))}, "
+        f"ca_neat={_format_optional_float(exact.get('ca_neat'))}, "
+        f"base={_format_optional_float(exact.get('base'))}, "
+        f"random_best={_format_optional_float(exact.get('random_best'))}, "
+        f"gepa_only={_format_optional_float(exact.get('gepa_only'))}"
+    )
+    print(
+        "   Minimum credible win: "
+        f"{report['interpretation'].get('minimum_credible_win')}"
+    )
+    print(f"   Report: {report['artifacts']['proof_report']}")
 
 
 if __name__ == "__main__":

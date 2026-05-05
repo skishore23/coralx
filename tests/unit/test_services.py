@@ -4,6 +4,7 @@ from pathlib import Path
 
 import pytest
 
+from core.application.services import create_executor
 from core.common.config import (
     CacheConfig,
     CoralConfig,
@@ -24,6 +25,7 @@ from core.domain.neat import Population
 from core.services.genetic_operations import GeneticOperationsService
 from core.services.population_manager import PopulationManager
 from core.services.progress_tracker import ProgressTracker
+from infra.executors.local import LocalExecutor, LocalExecutorConfig
 
 
 def create_test_config():
@@ -241,6 +243,21 @@ class TestGeneticOperationsService:
         assert offspring
         assert all(genome.run_id == "proof-run" for genome in offspring)
 
+    def test_mutation_failure_raises_instead_of_skipping(self, monkeypatch):
+        """Genetic operation failures should fail the run, not silently drop offspring."""
+        config = create_test_config()
+        config.execution.crossover_rate = 0.0
+        service = GeneticOperationsService(config, 42)
+        survivors = Population(create_test_population(2).genomes)
+
+        def fail_mutation(*args, **kwargs):
+            raise RuntimeError("mutation exploded")
+
+        monkeypatch.setattr("core.services.genetic_operations.mutate", fail_mutation)
+
+        with pytest.raises(Exception, match="mutation exploded"):
+            service.reproduce_population(survivors, target_size=4, generation=0)
+
 
 class TestProgressTracker:
     """Test ProgressTracker service."""
@@ -292,6 +309,41 @@ class TestProgressTracker:
         assert progress_data["cache_stats"]["hit_rate"] == 0.8
         assert progress_data["cache_stats"]["total_adapters"] == 10
         assert progress_data["cache_stats"]["cache_size_mb"] == 100.5
+
+
+class TestLocalExecutor:
+    """Test local executor wiring."""
+
+    def test_create_executor_uses_execution_max_workers(self):
+        """Execution config should control local executor worker count."""
+        config = create_test_config()
+        config.execution.max_workers = 2
+
+        executor = create_executor(config)
+
+        try:
+            assert isinstance(executor, LocalExecutor)
+            assert executor.config.max_workers == 2
+        finally:
+            executor.shutdown()
+
+    def test_submit_batch_preserves_result_order(self):
+        """Batch submission should return results in task order."""
+        executor = LocalExecutor(LocalExecutorConfig(max_workers=2))
+
+        try:
+            results = executor.submit_batch(
+                [
+                    (lambda value: value, (1,), {}),
+                    (lambda value: value, (2,), {}),
+                    (lambda value: value, (3,), {}),
+                ]
+            )
+        finally:
+            executor.shutdown()
+
+        assert [result.result for result in results] == [1, 2, 3]
+        assert all(result.is_successful() for result in results)
 
 
 if __name__ == "__main__":

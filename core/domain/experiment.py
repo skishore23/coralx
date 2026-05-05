@@ -229,10 +229,7 @@ def calculate_experiment_metrics(
         try:
             best_genome = population.best()
             if best_genome.has_multi_scores():
-                scores = best_genome.multi_scores
-                best_fitness = (
-                    scores.bugfix + scores.style + scores.security + scores.runtime
-                ) / 4.0
+                best_fitness = best_genome.multi_scores.overall_fitness()
             else:
                 best_fitness = (
                     best_genome.fitness if hasattr(best_genome, "fitness") else 0.0

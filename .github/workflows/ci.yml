@@ -24,7 +24,7 @@ jobs:
     
     - name: Lint with ruff
       run: |
-        ruff check . --select E,W,F --ignore E501,W293,F401,F841,E712,E722,W292,W291,E402,UP006,UP045,UP038,UP015,UP028,UP035,UP035,B904,B011,C408,I001
+        ruff check core infra plugins tests
     
     - name: Format check with black
       run: |
@@ -47,8 +47,7 @@ jobs:
     
     - name: Type check with mypy
       run: |
-        echo "Skipping type checking for research code - too many type issues to fix"
-        # mypy core infra plugins --ignore-missing-imports --no-strict-optional
+        mypy core infra plugins
 
   test:
     runs-on: ubuntu-latest

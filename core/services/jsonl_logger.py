@@ -93,11 +93,7 @@ class JSONLLogger(LoggingMixin):
         if genome.has_multi_scores():
             scores = genome.multi_scores
             genome_data["multi_objective_scores"] = {
-                "bugfix": scores.bugfix,
-                "style": scores.style,
-                "security": scores.security,
-                "runtime": scores.runtime,
-                "syntax": scores.syntax,
+                **scores.to_dict(),
                 "overall_fitness": scores.overall_fitness(),
             }
 
