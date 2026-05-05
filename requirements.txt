@@ -26,6 +26,7 @@ unsloth>=2023.11
 
 # Terminal UI for dashboard
 rich>=13.0.0
+pillow>=10.0.0
 
 # Multi-objective AI safety dependencies
 scikit-learn>=1.0.0  # For AUROC, precision/recall metrics
